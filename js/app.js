@@ -1,6 +1,7 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
-import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js';
+// ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
+import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=3';
 import * as Store from './storage.js';
 import * as Stats from './stats.js';
 import { Timer } from './timer.js';
@@ -376,7 +377,7 @@ function showTab(name) {
 /* ---------- Algos ---------- */
 // Sélecteurs propres à la bibliothèque : cube (puzzles disponibles) puis ensemble d'algos de ce cube.
 let algosPuzzle = DEFAULT_PUZZLE;
-let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets[0].id;
+let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets?.[0]?.id;
 
 const radioChips = (name, items, current) => items
   .map(it => `<label class="chip"><input type="radio" name="${name}" value="${it.id}" ${it.id === current ? 'checked' : ''}><span>${esc(it.name)}</span></label>`)

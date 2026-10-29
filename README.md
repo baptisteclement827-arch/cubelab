@@ -17,6 +17,13 @@ python -m http.server 8333
 Puis ouvrir http://localhost:8333 (tests du moteur : http://localhost:8333/tests.html).
 Garder le port 8333 : les données sont stockées dans le navigateur, liées à cette adresse.
 
+## Publier une modification
+
+GitHub Pages laisse le navigateur garder les fichiers en cache 10 minutes. Quand on modifie
+`css/style.css`, `js/app.js` ou `js/puzzles/registry.js`, on augmente leur numéro `?v=…`
+(dans `index.html` pour les deux premiers, dans l'import de `js/app.js` pour le registre),
+sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
+
 ## Structure
 
 - `js/core/nxn.js` : moteur générique NxN (facettes au format Kociemba U R F D L B)

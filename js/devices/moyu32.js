@@ -105,11 +105,18 @@ export function plausible(msg) {
 }
 
 export const isMoyu32Name = name => /^WCU_MY3/.test(name || '');
-// Le nom « WCU_MY32_ABCD » donne la MAC CF:30:16:00:AB:CD.
-export function macFromName(name) {
-  const m = /^WCU_MY32_([0-9A-F]{2})([0-9A-F]{2})$/.exec(name || '');
-  return m ? `CF:30:16:00:${m[1]}:${m[2]}` : null;
+// Adresse MAC saisie librement (« cf3016017333 », « CF:30:16:01:73:33 »…) -> « CF:30:16:01:73:33 », ou null.
+export function normalizeMac(input) {
+  const hex = String(input || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+  return hex.length === 12 ? hex.match(/../g).join(':') : null;
 }
+
+// Le nom « WCU_MY32_ABCD » donne les deux derniers octets de la MAC ; les premiers sont CF:30:16:00 ou CF:30:16:01.
+export function macsFromName(name) {
+  const m = /^WCU_MY32_([0-9A-F]{2})([0-9A-F]{2})$/i.exec(name || '');
+  return m ? ['00', '01'].map(b => `CF:30:16:${b}:${m[1]}:${m[2]}`.toUpperCase()) : [];
+}
+export const macFromName = name => macsFromName(name)[0] || null;
 
 // Lit la MAC dans l'annonce Bluetooth (6 derniers octets des données constructeur, à l'envers).
 async function macFromAdvertisement(device, timeout = 4000) {
@@ -137,14 +144,15 @@ async function macFromAdvertisement(device, timeout = 4000) {
   }
 }
 
-// Connexion (lancée par un clic). Callbacks : onEvent(événement), onStatus(statut), askMac(nom, macProposée) -> MAC ou null.
-export async function connectMoyu32({ onEvent, onStatus, askMac }) {
+// Connexion (lancée par un clic). Callbacks : onEvent(événement), onStatus(statut),
+// askMac(nom, macProposée) -> MAC ou null, knownMac(nom) -> MAC déjà validée, onMac(nom, mac) une fois validée.
+export async function connectMoyu32({ onEvent, onStatus, askMac, knownMac = () => null, onMac = () => {} }) {
   const device = await navigator.bluetooth.requestDevice({
     filters: [{ namePrefix: 'WCU_MY3' }],
     optionalServices: [SERVICE],
     optionalManufacturerData: CICS,
   });
-  let mac = macFromName(device.name) || await macFromAdvertisement(device);
+  let mac = null;
   let codec = null;
   let writer = null;
   let closed = false;
@@ -209,13 +217,27 @@ export async function connectMoyu32({ onEvent, onStatus, askMac }) {
   });
 
   await open();
-  for (let tries = 0; ; tries++) {
-    if (!mac || (tries > 0)) {
-      mac = await askMac(device.name, mac);
-      if (!mac) { closed = true; device.gatt.disconnect(); throw new Error('Adresse MAC du cube inconnue'); }
-    }
-    if (await handshake()) break;
+  // Adresses essayées dans l'ordre : déjà validée, annonce Bluetooth, déduites du nom ; sinon on la demande.
+  const tried = new Set();
+  const candidates = [knownMac(device.name), ...macsFromName(device.name)];
+  const tryMac = async m => {
+    m = normalizeMac(m);
+    if (!m || tried.has(m)) return false;
+    tried.add(m);
+    mac = m;
+    return handshake();
+  };
+  let ok = false;
+  for (const m of candidates) if ((ok = await tryMac(m))) break;
+  if (!ok) ok = await tryMac(await macFromAdvertisement(device));
+  while (!ok) {
+    const answer = await askMac(device.name, [...tried].at(-1));
+    if (!answer) { closed = true; device.gatt.disconnect(); throw new Error('Adresse MAC du cube inconnue'); }
+    if (!normalizeMac(answer)) continue;
+    tried.delete(normalizeMac(answer)); // une saisie explicite est toujours réessayée
+    ok = await tryMac(answer);
   }
+  onMac(device.name, mac);
   onStatus('connected');
   return {
     name: device.name,

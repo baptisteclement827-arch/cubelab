@@ -1,7 +1,7 @@
 // Tests du décodage des paquets du timer GAN (paquets construits à la main, sans appareil).
 import { crc16, parseStatePacket, STATES } from '../devices/gan-timer.js';
 import { aes128 } from '../devices/aes128.js';
-import { makeCodec, parseMessage, parseFacelets, plausible, macFromName, MSG } from '../devices/moyu32.js';
+import { makeCodec, parseMessage, parseFacelets, plausible, macFromName, macsFromName, normalizeMac, MSG } from '../devices/moyu32.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -68,6 +68,13 @@ function stateFrame(facelets, count) {
   return b;
 }
 
+test('MoYu : adresse MAC saisie sans deux-points ou en minuscules', () => {
+  ok(normalizeMac('cf3016017333') === 'CF:30:16:01:73:33', normalizeMac('cf3016017333'));
+  ok(normalizeMac('CF:30:16:01:73:33') === 'CF:30:16:01:73:33', 'avec deux-points');
+  ok(normalizeMac('cf-30-16-01-73-33 ') === 'CF:30:16:01:73:33', 'avec tirets');
+  ok(normalizeMac('cf30160173') === null, 'trop courte');
+  ok(macsFromName('WCU_MY32_7333').includes('CF:30:16:01:73:33'), 'variante CF:30:16:01 essayée');
+});
 test('MoYu : MAC déduite du nom WCU_MY32_XXXX', () => {
   ok(macFromName('WCU_MY32_1A2B') === 'CF:30:16:00:1A:2B', macFromName('WCU_MY32_1A2B'));
   ok(macFromName('WCU_MY32') === null, 'nom sans suffixe');

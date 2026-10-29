@@ -79,11 +79,14 @@ body {
 
 .topbar {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  padding: 10px 16px; min-height: 56px; border-bottom: 1px solid var(--border); background: var(--surface);
+  padding: 8px 16px; min-height: 56px; border-bottom: 1px solid var(--border); background: var(--surface);
 }
 .topbar h1 { margin: 0; font-size: 18px; font-weight: 700; }
 .selectors { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .selectors[hidden] { display: none; }
+.selectors .picker-list { left: auto; right: 0; }
+.picker-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker-list li { white-space: nowrap; }
 
 .placeholder { margin: auto; max-width: 420px; padding: 32px 16px; text-align: center; color: var(--muted); }
 .placeholder h2 { color: var(--text); margin: 0 0 8px; font-size: 22px; }
@@ -385,7 +388,8 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .topbar { gap: 10px; min-height: 0; }
   .topbar h1 { font-size: 16px; }
   .selectors { margin-left: 0; width: 100%; }
-  .selectors select { flex: 1; min-width: 0; }
+  .selectors .picker { flex: 1; min-width: 0; }
+  .selectors .picker-btn { width: 100%; min-width: 0; }
   /* column + order (pas column-reverse : le haut deviendrait inaccessible au défilement) */
   #view-timer, #view-trainer { flex-direction: column; padding: 12px 16px; overflow: auto; }
   .tr-stage { order: 0; }

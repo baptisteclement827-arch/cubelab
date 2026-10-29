@@ -5,7 +5,7 @@ import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
 import { Timer } from './timer.js?v=12';
-import { picker } from './picker.js?v=10';
+import { picker } from './picker.js?v=16';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
 import { solver, runGenerator } from './solver/client.js';
@@ -42,15 +42,32 @@ function session() {
 }
 
 /* ---------- Sélecteurs ---------- */
+// Mêmes menus déroulants que l'onglet Algos ; seuls les puzzles disponibles sont proposés.
+const timerPuzzlePicker = picker($('#puzzle'), {
+  label: 'Cube',
+  onChange(id) {
+    puzzleId = id;
+    data.puzzle = puzzleId;
+    persist();
+    prefetched = null;
+    refreshAll();
+  },
+});
+const sessionPicker = picker($('#session'), {
+  label: 'Session',
+  onChange(id) {
+    data.current[puzzleId] = id;
+    persist();
+    refreshAll();
+  },
+});
+
 function renderSelectors() {
-  $('#puzzle').innerHTML = Object.values(PUZZLES)
-    .map(p => `<option value="${p.id}" ${p.id === puzzleId ? 'selected' : ''} ${p.available ? '' : 'disabled'}>${p.name}${p.available ? '' : ' (bientôt)'}</option>`)
-    .join('');
+  timerPuzzlePicker.set(Object.values(PUZZLES).filter(p => p.available), puzzleId);
   const current = session();
-  $('#session').innerHTML = data.sessions
+  sessionPicker.set(data.sessions
     .filter(s => s.puzzle === puzzleId)
-    .map(s => `<option value="${s.id}" ${s.id === current.id ? 'selected' : ''}>${esc(s.name)} (${s.solves.length})</option>`)
-    .join('');
+    .map(s => ({ id: s.id, name: `${s.name} (${s.solves.length})` })), current.id);
 }
 
 /* ---------- Mélange ---------- */
@@ -271,19 +288,6 @@ $('#solve-dialog').addEventListener('close', () => {
   openSolveIndex = null;
 });
 
-/* ---------- Puzzle et sessions ---------- */
-$('#puzzle').onchange = e => {
-  puzzleId = e.target.value;
-  data.puzzle = puzzleId;
-  persist();
-  prefetched = null;
-  refreshAll();
-};
-$('#session').onchange = e => {
-  data.current[puzzleId] = e.target.value;
-  persist();
-  refreshAll();
-};
 
 /* ---------- Réglages ---------- */
 const form = $('#settings-dialog form');

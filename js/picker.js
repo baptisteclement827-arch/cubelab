@@ -1,5 +1,7 @@
 // Menu déroulant maison (remplace <select>, dont la liste suit le style du système).
 // picker(el, { label, onChange }) ; .set(items, value) met à jour les options [{ id, name }].
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
 export function picker(el, { label, onChange }) {
   let items = [];
   let value = null;
@@ -7,18 +9,18 @@ export function picker(el, { label, onChange }) {
   el.classList.add('picker');
   el.innerHTML = `
     <button type="button" class="picker-btn" aria-haspopup="listbox" aria-expanded="false">
-      <span class="picker-label">${label}</span>
+      <span class="picker-label">${esc(label)}</span>
       <span class="picker-value"></span>
       <svg class="picker-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </button>
-    <ul class="picker-list" role="listbox" aria-label="${label}" hidden></ul>`;
+    <ul class="picker-list" role="listbox" aria-label="${esc(label)}" hidden></ul>`;
   const btn = el.querySelector('.picker-btn');
   const list = el.querySelector('.picker-list');
 
   const render = () => {
     el.querySelector('.picker-value').textContent = items.find(i => i.id === value)?.name ?? '—';
     list.innerHTML = items.map((it, k) => `<li role="option" data-id="${it.id}" aria-selected="${it.id === value}"
-      class="${k === active ? 'active' : ''}">${it.name}</li>`).join('');
+      class="${k === active ? 'active' : ''}">${esc(it.name)}</li>`).join('');
   };
   const open = () => {
     active = Math.max(0, items.findIndex(i => i.id === value));

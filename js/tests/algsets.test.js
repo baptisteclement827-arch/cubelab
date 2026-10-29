@@ -1,7 +1,8 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
 import { parseAlg, mirrorMoves, formatAlg } from '../core/notation.js';
-import { ALG_SETS, caseState, solvesCase, relabel } from '../algsets/index.js';
+import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState } from '../algsets/index.js';
+import { timeStats } from '../stats.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -142,6 +143,39 @@ test('PLL : algos alternatifs reconnus (M2 U M U2 M\' U M2 = Ua, V avec rotation
   ok(solvesCase(pll, byName('Ub'), "M2 U' M U2 M' U' M2") !== null, 'Ub (M) refusé');
   ok(solvesCase(pll, byName('Ua'), "M2 U' M U2 M' U' M2") === null, 'Ub accepté pour Ua');
   ok(solvesCase(pll, byName('V'), byName('V').alg) === '', 'V refusé');
+});
+
+// ---------- Entraînement ----------
+test('Probabilités réalistes : OLL sur 216, PLL sur 288 (sans le cas résolu)', () => {
+  const sum = set => [...caseWeights(set).values()].reduce((a, b) => a + b, 0);
+  ok(sum(oll) === 215, `OLL : ${sum(oll)}`);
+  ok(sum(pll) === 284, `PLL : ${sum(pll)}`);
+  const w = caseWeights(oll);
+  ok(w.get('oll20') === 1 && w.get('oll21') === 2 && w.get('oll27') === 4, 'OLL 20 = 1, OLL 21 = 2, Sune = 4');
+  const wp = caseWeights(pll);
+  ok(wp.get('pllH') === 4 && wp.get('pllE') === 8 && wp.get('pllT') === 16, `H = 4, E = 8, T = 16 (${wp.get('pllH')}, ${wp.get('pllE')}, ${wp.get('pllT')})`);
+});
+test('État aléatoire d\'un cas : F2L intacte et l\'algo résout le cas (AUF compris)', () => {
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const set of [oll, pll]) {
+    for (const c of set.CASES) {
+      const s = randomCaseState(set, c, rand);
+      ok(f2lSolved(s), `${c.name} : F2L cassée`);
+      let solved = false;
+      for (let a = 0; a < 4 && !solved; a++) {
+        let t = relabel(c3.apply(c3.apply(s, parseAlg(['', 'U', 'U2', "U'"][a])), parseAlg(c.alg)));
+        if (set === oll) solved = TOP.every(j => t[j] === 0);
+        else for (let b = 0; b < 4 && !solved; b++, t = c3.apply(t, U)) solved = c3.isSolved(t);
+      }
+      ok(solved, `${c.name} : l'état aléatoire n'est pas ce cas`);
+    }
+  }
+});
+test('Statistiques d\'entraînement (moyenne, médiane, meilleur, pire)', () => {
+  const st = timeStats([3000, 1000, 2000, 6000]);
+  ok(st.count === 4 && st.mean === 3000 && st.median === 2500 && st.best === 1000 && st.worst === 6000, JSON.stringify(st));
+  ok(timeStats([]) === null, 'vide = null');
 });
 
 export default results;

@@ -263,7 +263,6 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case-alg-locked.pressing::before { transform: scaleX(1); transition: transform 1s linear; }
 .case-alg-locked:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .case-alg-text { position: relative; font-family: var(--mono); font-size: 16px; overflow-wrap: anywhere; }
-.case-alg-text::before { content: "🔒 "; font-family: system-ui, sans-serif; font-size: 13px; }
 .case-alg { font-family: var(--mono); font-size: 16px; font-weight: 400; resize: vertical; width: 100%; }
 .case-check { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .case-check code { font-family: var(--mono); color: var(--text); }
@@ -301,6 +300,43 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .picker-list li:hover, .picker-list li.active { background: var(--surface-2); }
 .picker-list li[aria-selected="true"] { color: var(--accent); }
 .picker-list li[aria-selected="true"]::after { content: "✓"; }
+
+/* Mode Train : sélection des cas */
+.train-btn { margin-left: auto; align-self: stretch; padding: 0 22px; font-size: 15px; }
+.train-btn[hidden] { display: none; }
+.train-bar { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.train-bar[hidden], .train-foot[hidden] { display: none; }
+.train-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.train-row > .muted { min-width: 70px; font-size: 14px; }
+/* Pied de page collant : compteur + Annuler/Lancer toujours visibles pendant la sélection. */
+.train-foot {
+  position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; box-shadow: 0 -6px 18px rgb(0 0 0 / 0.12);
+}
+.train-foot strong { margin-right: auto; font-size: 14px; }
+.train-foot .btn { white-space: nowrap; }
+.status-btn .muted { font-weight: 500; }
+.status-btn.on { border-color: var(--accent); color: var(--accent); }
+.status-btn.status-learning.on { border-color: var(--inspect); color: var(--inspect); }
+.status-btn.status-learned.on { border-color: var(--ready); color: var(--ready); }
+.subset-toggle { display: none; margin-left: auto; font-size: 13px; padding: 2px 10px; }
+.selecting .subset-toggle { display: inline-block; }
+.selecting .case { opacity: 0.55; }
+.selecting .case.selected { opacity: 1; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+
+/* ---------- Trainer ---------- */
+#view-trainer { gap: 16px; padding: 16px; }
+#view-trainer.empty > :not(#tr-empty), #view-trainer:not(.empty) > #tr-empty { display: none; }
+.tr-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+#tr-summary { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.tr-stats th, .tr-stats td { padding-left: 6px; padding-right: 8px; }
+.tr-last { display: flex; align-items: center; gap: 14px; padding: 10px 14px; }
+.tr-last[hidden] { display: none; }
+.tr-last-img { width: 72px; flex-shrink: 0; }
+.tr-last-img .ll { width: 100%; height: auto; display: block; }
+.tr-last-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-last-body code { font-family: var(--mono); font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+body.solving .tr-last, body.solving #tr-skip { visibility: hidden; }
 
 /* ---------- Dialogues ---------- */
 dialog {
@@ -342,7 +378,11 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .selectors { margin-left: 0; width: 100%; }
   .selectors select { flex: 1; min-width: 0; }
   /* column + order (pas column-reverse : le haut deviendrait inaccessible au défilement) */
-  #view-timer { flex-direction: column; padding: 12px 16px; overflow: auto; }
+  #view-timer, #view-trainer { flex-direction: column; padding: 12px 16px; overflow: auto; }
+  .tr-stage { order: 0; }
+  .tr-side { order: 1; }
+  .tr-last { flex-wrap: wrap; }
+  .tr-last #tr-undo { flex-basis: 100%; }
   .side { width: 100%; order: 1; }
   .stage { flex: none; }
   .solves { max-height: 320px; }

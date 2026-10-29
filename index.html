@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
 <div class="app">
@@ -21,11 +21,11 @@
     </button>
     <button class="tab" data-tab="algos" data-title="Algos">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
-      <span>Algos</span><em class="soon">bientôt</em>
+      <span>Algos</span>
     </button>
     <button class="tab" data-tab="trainer" data-title="Trainer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
-      <span>Trainer</span><em class="soon">bientôt</em>
+      <span>Trainer</span>
     </button>
     <button class="tab" data-tab="lab" data-title="Labo d'algos">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></svg>
@@ -180,12 +180,64 @@
       <div class="card algos-head">
         <div id="algos-puzzle"></div>
         <div id="algos-set"></div>
+        <button id="train-btn" class="btn primary train-btn">Train</button>
+      </div>
+      <div id="train-bar" class="card train-bar" hidden>
+        <div class="train-row">
+          <span class="muted">Sélection</span>
+          <div class="row-btns">
+            <button type="button" class="btn" id="train-all">Tout</button>
+            <button type="button" class="btn" id="train-none">Aucun</button>
+          </div>
+        </div>
+        <div class="train-row">
+          <span class="muted">Par état</span>
+          <div class="row-btns" id="train-status"></div>
+        </div>
+        <div class="train-row">
+          <div id="train-scramble"></div>
+          <div id="train-dist"></div>
+        </div>
       </div>
       <div id="algos-list" class="algos-list"></div>
+      <div id="train-foot" class="card train-foot" hidden>
+        <strong id="train-count"></strong>
+        <button type="button" class="btn" id="train-cancel">Annuler</button>
+        <button type="button" class="btn primary" id="train-start">Lancer</button>
+      </div>
     </div>
   </section>
   <section id="view-trainer" class="view">
-    <div class="placeholder"><h2>Trainer</h2><p>Entraînement ciblé sur tes cas les plus lents. Cette rubrique arrive bientôt.</p></div>
+    <div id="tr-empty" class="placeholder">
+      <h2>Trainer</h2>
+      <p>Aucun algo sélectionné. Dans l'onglet Algos, appuie sur Train et choisis les cas à travailler.</p>
+      <p><button type="button" class="btn primary" id="tr-choose">Choisir des algos</button></p>
+    </div>
+    <aside class="side tr-side">
+      <div class="card tr-info">
+        <div id="tr-summary"></div>
+        <button type="button" class="btn" id="tr-edit">Modifier la sélection</button>
+      </div>
+      <div class="card solves tr-stats">
+        <table>
+          <thead><tr><th>Cas</th><th>n</th><th title="Moyenne">Moy.</th><th title="Médiane">Méd.</th><th title="Meilleur">Min</th><th title="Pire">Max</th></tr></thead>
+          <tbody id="tr-stats-body"></tbody>
+        </table>
+      </div>
+    </aside>
+    <div class="stage tr-stage">
+      <div class="scramble-bar">
+        <div id="tr-scramble" class="scramble"></div>
+        <div class="scramble-actions">
+          <button type="button" id="tr-skip" class="btn ghost">Passer</button>
+        </div>
+      </div>
+      <div id="tr-timer-zone" class="timer-zone">
+        <div id="tr-timer" class="timer">0.00</div>
+        <div id="tr-hint" class="hint"></div>
+      </div>
+      <div id="tr-last" class="card tr-last" hidden></div>
+    </div>
   </section>
 </main>
 </div>
@@ -261,6 +313,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=9"></script>
+<script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>

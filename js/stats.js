@@ -66,3 +66,17 @@ export function fmtSolve(solve, precision) {
   if (solve.p === 'DNF') return 'DNF';
   return fmt(value(solve), { precision }) + (solve.p === '+2' ? '+' : '');
 }
+
+// Temps d'entraînement d'un algo : moyenne, médiane, meilleur et pire.
+export function timeStats(times) {
+  if (!times?.length) return null;
+  const sorted = [...times].sort((a, b) => a - b);
+  const n = sorted.length;
+  return {
+    count: n,
+    mean: sorted.reduce((a, b) => a + b, 0) / n,
+    median: n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2,
+    best: sorted[0],
+    worst: sorted[n - 1],
+  };
+}

@@ -3,11 +3,11 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
-import * as Stats from './stats.js';
+import * as Stats from './stats.js?v=10';
 import { Timer } from './timer.js';
-import { picker } from './picker.js';
+import { picker } from './picker.js?v=10';
 import { renderNet, renderLL } from './render2d.js?v=7';
-import { ALG_SETS, caseState as algCaseState, solvesCase } from './algsets/index.js?v=6';
+import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState } from './algsets/index.js?v=10';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -188,15 +188,23 @@ const timer = new Timer({
 });
 
 const typing = e => e.target.closest?.('input, textarea, select, [contenteditable]');
-const timerActive = () => activeTab === 'timer' && !document.querySelector('dialog[open]');
+// Timer qui reçoit le clavier : celui du Timer ou celui du Trainer, selon l'onglet.
+const activeTimer = () => {
+  if (document.querySelector('dialog[open]')) return null;
+  if (activeTab === 'timer') return timer;
+  if (activeTab === 'trainer' && training) return trainerTimer;
+  return null;
+};
 
 document.addEventListener('keydown', e => {
-  if (!timerActive() || typing(e)) return;
-  if (timer.keyDown(e.code, e.repeat)) e.preventDefault();
+  const t = activeTimer();
+  if (!t || typing(e)) return;
+  if (t.keyDown(e.code, e.repeat)) e.preventDefault();
 });
 document.addEventListener('keyup', e => {
-  if (!timerActive() || typing(e)) return;
-  if (timer.keyUp(e.code)) e.preventDefault();
+  const t = activeTimer();
+  if (!t || typing(e)) return;
+  if (t.keyUp(e.code)) e.preventDefault();
 });
 const zone = $('#timer-zone');
 zone.addEventListener('pointerdown', e => { if (e.button === 0) { e.preventDefault(); timer.pointerDown(); } });
@@ -204,6 +212,7 @@ zone.addEventListener('pointerup', e => { if (e.button === 0) timer.pointerUp();
 // Arrêt au toucher n'importe où pendant un solve (mobile).
 document.addEventListener('pointerdown', e => {
   if (timer.state === 'running' && !zone.contains(e.target)) timer.pointerDown();
+  if (trainerTimer.state === 'running' && !$('#tr-timer-zone').contains(e.target)) trainerTimer.pointerDown();
 });
 
 /* ---------- Boutons ---------- */
@@ -360,6 +369,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
   tab.onclick = () => {
     activeTab = tab.dataset.tab;
     timer.cancel();
+    trainerTimer.cancel();
     document.querySelectorAll('.tab[data-tab]').forEach(t => {
       t.classList.toggle('active', t === tab);
       if (t === tab) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
@@ -369,6 +379,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
+    if (activeTab === 'trainer') renderTrainer();
   };
 });
 
@@ -383,11 +394,11 @@ let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets?.[0]?.id;
 
 const puzzlePicker = picker($('#algos-puzzle'), {
   label: 'Cube',
-  onChange(id) { algosPuzzle = id; openCaseId = null; renderAlgos(); },
+  onChange(id) { algosPuzzle = id; openCaseId = null; selection.clear(); renderAlgos(); },
 });
 const setPicker = picker($('#algos-set'), {
   label: 'Ensemble',
-  onChange(id) { algosSet = id; openCaseId = null; renderAlgos(); },
+  onChange(id) { algosSet = id; openCaseId = null; selection.clear(); renderAlgos(); },
 });
 
 function renderAlgos() {
@@ -396,6 +407,7 @@ function renderAlgos() {
   puzzlePicker.set(Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
   setPicker.set(sets, algosSet);
   renderAlgoList();
+  renderTrainBar();
 }
 
 // Les schémas sont calculés une seule fois par cas.
@@ -413,12 +425,14 @@ const STATUSES = [
 ];
 const setKey = () => `${algosPuzzle}/${algosSet}`;
 const currentSet = () => ALG_SETS[setKey()];
-const progress = id => data.algs[setKey()]?.[id] || {};
+const progressIn = (key, id) => data.algs[key]?.[id] || {};
+const progress = id => progressIn(setKey(), id);
 const myAlg = c => progress(c.id).alg || c.alg;
 const statusOf = c => progress(c.id).status || 'unknown';
 
-function setProgress(id, patch) {
-  const all = (data.algs[setKey()] ||= {});
+const setProgress = (id, patch) => setProgressIn(setKey(), id, patch);
+function setProgressIn(key, id, patch) {
+  const all = (data.algs[key] ||= {});
   const entry = { ...all[id], ...patch };
   for (const k of Object.keys(entry)) if (!entry[k]) delete entry[k];
   if (Object.keys(entry).length) all[id] = entry; else delete all[id];
@@ -432,7 +446,7 @@ const UNLOCK_MS = 1000;
 
 function caseButton(c) {
   const st = statusOf(c);
-  return `<button type="button" class="case ${st}${c.id === openCaseId ? ' open' : ''}" data-case="${c.id}" title="${esc(myAlg(c))}" aria-expanded="${c.id === openCaseId}">
+  return `<button type="button" class="case ${st}${c.id === openCaseId ? ' open' : ''}${selection.has(c.id) ? ' selected' : ''}" data-case="${c.id}" title="${esc(myAlg(c))}" aria-expanded="${c.id === openCaseId}">
     ${caseImage(c)}<span class="case-name">${esc(c.name)}</span>
   </button>`;
 }
@@ -447,7 +461,8 @@ function renderAlgoList() {
     const cases = set.CASES.filter(c => c.subset === sub.id);
     if (!cases.length) return '';
     return `<section class="card subset">
-      <h2>${esc(sub.name)} <span class="muted">${cases.length}</span></h2>
+      <h2>${esc(sub.name)} <span class="muted">${cases.length}</span>
+        <button type="button" class="btn ghost subset-toggle" data-subset-toggle="${sub.id}">${cases.every(c => selection.has(c.id)) ? 'Retirer' : 'Tout le subset'}</button></h2>
       <div class="case-grid">${cases.map(caseButton).join('')}</div>
     </section>`;
   }).join('');
@@ -480,6 +495,7 @@ function placeCasePanel(scroll) {
         </div>
       </div>
       <p class="case-check muted"></p>
+      <p class="case-times muted">${caseTimesText(progress(c.id).times)}</p>
       <div class="status-pick" role="radiogroup" aria-label="État">
         ${STATUSES.map(s => `<label class="chip status-${s.id}"><input type="radio" name="case-status" value="${s.id}" ${s.id === statusOf(c) ? 'checked' : ''}><span>${s.name}</span></label>`).join('')}
       </div>
@@ -508,6 +524,14 @@ function checkCaseAlg(panel, set, c) {
     out.textContent = e.message;
     out.classList.add('error');
   }
+}
+
+function caseTimesText(times) {
+  const st = Stats.timeStats(times);
+  if (!st) return 'Pas encore de temps d\'entraînement.';
+  const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
+  const f1 = ms => Stats.fmt(ms, { precision: precision() });
+  return `Entraînement (${st.count}) : moyenne ${f(st.mean)} · médiane ${f(st.median)} · meilleur ${f1(st.best)} · pire ${f1(st.worst)}`;
 }
 
 function updateLock(panel, c) {
@@ -564,7 +588,10 @@ function refreshCaseButton(c) {
 
 $('#algos-list').addEventListener('click', e => {
   const b = e.target.closest('.case[data-case]');
-  if (b) openCase(b.dataset.case);
+  const sub = e.target.closest('[data-subset-toggle]');
+  if (selecting && b) toggleSelect([b.dataset.case]);
+  else if (selecting && sub) toggleSelect(currentSet().CASES.filter(c => c.subset === sub.dataset.subsetToggle).map(c => c.id));
+  else if (b) openCase(b.dataset.case);
   else if (e.target.closest('[data-close-case]')) openCase(openCaseId);
 });
 $('#algos-list').addEventListener('input', e => {
@@ -630,6 +657,219 @@ addEventListener('resize', () => {
   if (innerWidth !== lastWidth && openCaseId && activeTab === 'algos') placeCasePanel(false);
   lastWidth = innerWidth;
 });
+
+
+/* ---------- Train : sélection des cas ---------- */
+let selecting = false;
+const selection = new Set();
+const SCRAMBLE_MODES = [{ id: 'inverse', name: 'Inverse de mon algo' }, { id: 'random', name: 'Aléatoire' }];
+const DISTRIBUTIONS = [{ id: 'realistic', name: 'Réaliste' }, { id: 'balanced', name: 'Équilibrée' }];
+const trainOpts = { scramble: data.trainer?.scramble || 'inverse', dist: data.trainer?.dist || 'realistic' };
+const scramblePicker = picker($('#train-scramble'), { label: 'Mélange', onChange(id) { trainOpts.scramble = id; } });
+const distPicker = picker($('#train-dist'), { label: 'Répartition', onChange(id) { trainOpts.dist = id; } });
+
+function renderTrainBar() {
+  $('#view-algos').classList.toggle('selecting', selecting);
+  $('#train-bar').hidden = !selecting;
+  $('#train-foot').hidden = !selecting;
+  $('#train-btn').hidden = selecting || !currentSet();
+  if (!selecting) return;
+  const set = currentSet();
+  const n = selection.size;
+  $('#train-count').textContent = `${n} cas sélectionné${n > 1 ? 's' : ''}`;
+  $('#train-status').innerHTML = STATUSES.map(st => {
+    const ids = set.CASES.filter(c => statusOf(c) === st.id);
+    const all = ids.length && ids.every(c => selection.has(c.id));
+    return `<button type="button" class="btn status-btn status-${st.id}${all ? ' on' : ''}" data-status="${st.id}" ${ids.length ? '' : 'disabled'}>${st.name} <span class="muted">${ids.length}</span></button>`;
+  }).join('');
+  scramblePicker.set(SCRAMBLE_MODES, trainOpts.scramble);
+  distPicker.set(DISTRIBUTIONS, trainOpts.dist);
+  $('#train-start').disabled = !n;
+  $('#train-start').textContent = n ? `Lancer (${n})` : 'Lancer';
+}
+
+function toggleSelect(ids) {
+  const all = ids.every(id => selection.has(id));
+  for (const id of ids) all ? selection.delete(id) : selection.add(id);
+  renderAlgoList();
+  renderTrainBar();
+}
+
+function setSelecting(on) {
+  selecting = on;
+  if (on) {
+    openCaseId = null;
+    selection.clear();
+    // Reprend la sélection précédente si elle porte sur le même ensemble.
+    if (data.trainer?.set === setKey()) data.trainer.ids.forEach(id => selection.add(id));
+  }
+  renderAlgoList();
+  renderTrainBar();
+}
+
+$('#train-btn').onclick = () => setSelecting(true);
+$('#train-cancel').onclick = () => setSelecting(false);
+$('#train-all').onclick = () => { currentSet().CASES.forEach(c => selection.add(c.id)); renderAlgoList(); renderTrainBar(); };
+$('#train-none').onclick = () => { selection.clear(); renderAlgoList(); renderTrainBar(); };
+$('#train-status').addEventListener('click', e => {
+  const b = e.target.closest('[data-status]');
+  if (b) toggleSelect(currentSet().CASES.filter(c => statusOf(c) === b.dataset.status).map(c => c.id));
+});
+$('#train-start').onclick = () => {
+  if (!selection.size) return;
+  data.trainer = { set: setKey(), ids: [...selection], scramble: trainOpts.scramble, dist: trainOpts.dist };
+  persist();
+  setSelecting(false);
+  training = null;
+  showTab('trainer');
+};
+
+/* ---------- Trainer ---------- */
+let training = null; // { key, set, cases, current: { c, scramble }, next: Promise }
+const trHistory = []; // derniers essais de la séance : { key, id, ms }
+
+const trainerTimer = new Timer({
+  settings: () => ({ ...settings(), inspection: false }),
+  onUpdate(v) {
+    const el = $('#tr-timer');
+    el.className = 'timer';
+    if (v.state === 'running') el.textContent = runningText(v.ms);
+    else if (v.state === 'hold' || v.state === 'ready') {
+      el.classList.add(v.state);
+      if (v.state === 'ready') el.textContent = Stats.fmt(0, { precision: precision() });
+    }
+    document.body.classList.toggle('solving', v.state === 'running');
+    $('#tr-hint').textContent = { hold: 'Attends le vert…', ready: 'Relâche pour démarrer', running: '' }[v.state]
+      ?? 'Fais le mélange, puis maintiens Espace (ou appuie) et relâche pour démarrer';
+  },
+  onSolve({ ms }) {
+    if (!training?.current) return;
+    const { c } = training.current;
+    const times = [...(progressIn(training.key, c.id).times || []), ms];
+    setProgressIn(training.key, c.id, { times });
+    trHistory.push({ key: training.key, id: c.id, ms });
+    $('#tr-timer').textContent = Stats.fmt(ms, { precision: precision() });
+    showLastAttempt();
+    renderTrainerStats();
+    nextAttempt();
+  },
+});
+
+const trZone = $('#tr-timer-zone');
+trZone.addEventListener('pointerdown', e => { if (e.button === 0 && training?.current) { e.preventDefault(); trainerTimer.pointerDown(); } });
+trZone.addEventListener('pointerup', e => { if (e.button === 0 && training?.current) trainerTimer.pointerUp(); });
+
+function pickCase() {
+  const { set, cases } = training;
+  if (data.trainer.dist === 'balanced') return cases[Math.floor(Math.random() * cases.length)];
+  const w = caseWeights(set);
+  return pickWeighted(cases, c => w.get(c.id));
+}
+
+// Prépare un essai : un cas tiré au sort et son mélange.
+async function prepareAttempt() {
+  const { set, key } = training;
+  const c = pickCase();
+  if (data.trainer.scramble === 'inverse') {
+    const alg = progressIn(key, c.id).alg || c.alg;
+    return { c, scramble: formatAlg(simplify(invertMoves(parseAlg(alg)))) };
+  }
+  const sol = await solver.solve(randomCaseState(set, c));
+  return { c, scramble: formatAlg(invertMoves(parseAlg(sol))) };
+}
+
+async function nextAttempt() {
+  const t = training;
+  const pending = t.next || prepareAttempt();
+  t.next = null;
+  t.current = null;
+  const slow = setTimeout(() => { if (training === t) $('#tr-scramble').textContent = 'Génération du mélange…'; }, 80);
+  let attempt;
+  try {
+    attempt = await pending;
+  } catch (err) {
+    $('#tr-scramble').textContent = `Mélange impossible : ${err.message}`;
+    return;
+  } finally {
+    clearTimeout(slow);
+  }
+  if (training !== t) return;
+  t.current = attempt;
+  $('#tr-scramble').textContent = attempt.scramble;
+  t.next = prepareAttempt(); // le suivant est prêt d'avance
+}
+
+function startTraining() {
+  const cfg = data.trainer;
+  const set = ALG_SETS[cfg?.set];
+  const cases = set ? set.CASES.filter(c => cfg.ids.includes(c.id)) : [];
+  if (!cases.length) { training = null; return; }
+  training = { key: cfg.set, set, cases, current: null, next: null };
+  $('#tr-timer').textContent = Stats.fmt(0, { precision: precision() });
+  $('#tr-last').hidden = true;
+  nextAttempt();
+}
+
+function renderTrainer() {
+  if (!training) startTraining();
+  const on = !!training;
+  $('#view-trainer').classList.toggle('empty', !on);
+  if (!on) return;
+  const [puzzle, setId] = training.key.split('/');
+  const setName = PUZZLES[puzzle].algSets.find(x => x.id === setId)?.name;
+  const opt = (list, id) => list.find(x => x.id === id).name.toLowerCase();
+  $('#tr-summary').innerHTML = `<strong>${esc(PUZZLES[puzzle].name)} · ${esc(setName)}</strong>
+    <span class="muted">${training.cases.length} cas · mélange ${opt(SCRAMBLE_MODES, data.trainer.scramble)} · répartition ${opt(DISTRIBUTIONS, data.trainer.dist)}</span>`;
+  $('#tr-hint').textContent = 'Fais le mélange, puis maintiens Espace (ou appuie) et relâche pour démarrer';
+  renderTrainerStats();
+}
+
+function renderTrainerStats() {
+  const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
+  const f1 = ms => Stats.fmt(ms, { precision: precision() });
+  const rows = training.cases.map(c => ({ c, st: Stats.timeStats(progressIn(training.key, c.id).times) }));
+  // Les plus lents en premier : ce sont eux à travailler.
+  rows.sort((a, b) => (b.st?.mean ?? -1) - (a.st?.mean ?? -1));
+  $('#tr-stats-body').innerHTML = rows.map(({ c, st }) => `<tr>
+    <td>${esc(c.name)}</td><td>${st?.count ?? 0}</td><td>${f(st?.mean)}</td><td>${f(st?.median)}</td><td>${f1(st?.best)}</td><td>${f1(st?.worst)}</td>
+  </tr>`).join('');
+}
+
+function showLastAttempt() {
+  const last = trHistory.at(-1);
+  const set = ALG_SETS[last.key];
+  const c = set.CASES.find(x => x.id === last.id);
+  const alg = progressIn(last.key, c.id).alg || c.alg;
+  $('#tr-last').hidden = false;
+  $('#tr-last').innerHTML = `
+    <div class="tr-last-img">${renderLL(algCaseState(c.alg), set.view)}</div>
+    <div class="tr-last-body">
+      <div><strong>${esc(c.name)}</strong> · ${Stats.fmt(last.ms, { precision: precision() })}</div>
+      <code>${esc(alg)}</code>
+    </div>
+    <button type="button" class="btn ghost danger" id="tr-undo">Supprimer ce temps</button>`;
+}
+
+$('#tr-last').addEventListener('click', e => {
+  if (!e.target.closest('#tr-undo')) return;
+  const last = trHistory.pop();
+  if (!last) return;
+  const times = [...(progressIn(last.key, last.id).times || [])];
+  const i = times.lastIndexOf(last.ms);
+  if (i >= 0) times.splice(i, 1);
+  setProgressIn(last.key, last.id, { times: times.length ? times : null });
+  $('#tr-last').hidden = true;
+  renderTrainerStats();
+});
+$('#tr-skip').onclick = () => { if (training) nextAttempt(); };
+$('#tr-choose').onclick = () => { showTab('algos'); setSelecting(true); };
+$('#tr-edit').onclick = () => {
+  const [puzzle, setId] = (data.trainer?.set || '').split('/');
+  if (PUZZLES[puzzle]) { algosPuzzle = puzzle; algosSet = setId; }
+  showTab('algos');
+  renderAlgos();
+  setSelecting(true);
+};
 
 renderAlgos();
 

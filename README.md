@@ -39,4 +39,5 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/timer.js` : machine à états du timer (inspection WCA, maintien, pénalités)
 - `js/stats.js` : moyennes WCA (ao5, ao12, ...), formatage
 - `js/storage.js` : localStorage + export/import JSON
+- `js/picker.js` : menu déroulant maison (sélecteurs de l'onglet Algos)
 - `js/app.js` : interface

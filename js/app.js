@@ -5,6 +5,7 @@ import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js';
 import { Timer } from './timer.js';
+import { picker } from './picker.js';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase } from './algsets/index.js?v=6';
 import { solver, runGenerator } from './solver/client.js';
@@ -380,15 +381,20 @@ function showTab(name) {
 let algosPuzzle = DEFAULT_PUZZLE;
 let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets?.[0]?.id;
 
-const options = (items, current) => items
-  .map(it => `<option value="${it.id}" ${it.id === current ? 'selected' : ''}>${esc(it.name)}</option>`)
-  .join('');
+const puzzlePicker = picker($('#algos-puzzle'), {
+  label: 'Cube',
+  onChange(id) { algosPuzzle = id; openCaseId = null; renderAlgos(); },
+});
+const setPicker = picker($('#algos-set'), {
+  label: 'Ensemble',
+  onChange(id) { algosSet = id; openCaseId = null; renderAlgos(); },
+});
 
 function renderAlgos() {
   const sets = PUZZLES[algosPuzzle].algSets || [];
   if (!sets.some(s => s.id === algosSet)) algosSet = sets[0]?.id;
-  $('#algos-puzzle').innerHTML = options(Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
-  $('#algos-set').innerHTML = options(sets, algosSet);
+  puzzlePicker.set(Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
+  setPicker.set(sets, algosSet);
   renderAlgoList();
 }
 
@@ -420,9 +426,9 @@ function setProgress(id, patch) {
 }
 
 let openCaseId = null;
-// Un algo enregistré est verrouillé ; maintenir 2 s dessus le rend modifiable.
+// Un algo enregistré est verrouillé ; maintenir 1 s dessus le rend modifiable.
 let editingCaseId = null;
-const UNLOCK_MS = 2000;
+const UNLOCK_MS = 1000;
 
 function caseButton(c) {
   const st = statusOf(c);
@@ -469,9 +475,8 @@ function placeCasePanel(scroll) {
       <div class="stack">
         <label for="case-alg-${c.id}">Mon algo</label>
         <textarea id="case-alg-${c.id}" class="case-alg" rows="2" spellcheck="false" placeholder="${esc(c.alg)}">${esc(progress(c.id).alg || '')}</textarea>
-        <div class="case-alg-locked" tabindex="0" role="button" aria-label="Algo verrouillé : maintenir 2 secondes pour modifier" hidden>
+        <div class="case-alg-locked" tabindex="0" role="button" aria-label="Algo verrouillé : maintenir 1 seconde pour modifier" hidden>
           <span class="case-alg-text"></span>
-          <span class="case-alg-hint">Maintiens 2 s pour modifier</span>
         </div>
       </div>
       <p class="case-check muted"></p>
@@ -491,7 +496,7 @@ function checkCaseAlg(panel, set, c) {
   const alg = input.value.trim();
   out.className = 'case-check';
   if (!alg) {
-    out.innerHTML = `Algo par défaut (Tab pour le mettre) : <code>${esc(c.alg)}</code>`;
+    out.innerHTML = `Algo par défaut : <code>${esc(c.alg)}</code>`;
     out.classList.add('muted');
     return;
   }
@@ -626,8 +631,6 @@ addEventListener('resize', () => {
   lastWidth = innerWidth;
 });
 
-$('#algos-puzzle').addEventListener('change', e => { algosPuzzle = e.target.value; openCaseId = null; renderAlgos(); });
-$('#algos-set').addEventListener('change', e => { algosSet = e.target.value; openCaseId = null; renderAlgos(); });
 renderAlgos();
 
 /* ---------- Labo d'algos ---------- */

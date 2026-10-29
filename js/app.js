@@ -350,8 +350,7 @@ $('#import-file').onchange = async e => {
 };
 
 /* ---------- Onglets ---------- */
-// Le choix du puzzle concerne le timer, les stats et les algos ; la session seulement le timer et les stats.
-const TABS_WITH_PUZZLE = ['timer', 'stats', 'algos'];
+// Le puzzle et la session ne concernent que le timer (et bientôt les stats).
 const TABS_WITH_SESSION = ['timer', 'stats'];
 
 document.querySelectorAll('.tab[data-tab]').forEach(tab => {
@@ -364,8 +363,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     });
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${activeTab}`));
     $('#page-title').textContent = tab.dataset.title;
-    $('.selectors').hidden = !TABS_WITH_PUZZLE.includes(activeTab);
-    $('#session').hidden = !TABS_WITH_SESSION.includes(activeTab);
+    $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
   };
@@ -374,6 +372,26 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
 function showTab(name) {
   document.querySelector(`.tab[data-tab="${name}"]`).click();
 }
+
+/* ---------- Algos ---------- */
+// Sélecteurs propres à la bibliothèque : cube (puzzles disponibles) puis ensemble d'algos de ce cube.
+let algosPuzzle = DEFAULT_PUZZLE;
+let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets[0].id;
+
+const radioChips = (name, items, current) => items
+  .map(it => `<label class="chip"><input type="radio" name="${name}" value="${it.id}" ${it.id === current ? 'checked' : ''}><span>${esc(it.name)}</span></label>`)
+  .join('');
+
+function renderAlgos() {
+  const sets = PUZZLES[algosPuzzle].algSets || [];
+  if (!sets.some(s => s.id === algosSet)) algosSet = sets[0]?.id;
+  $('#algos-puzzle').innerHTML = radioChips('algos-puzzle', Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
+  $('#algos-set').innerHTML = radioChips('algos-set', sets, algosSet);
+}
+
+$('#algos-puzzle').addEventListener('change', e => { algosPuzzle = e.target.value; renderAlgos(); });
+$('#algos-set').addEventListener('change', e => { algosSet = e.target.value; renderAlgos(); });
+renderAlgos();
 
 /* ---------- Labo d'algos ---------- */
 let labState = null;

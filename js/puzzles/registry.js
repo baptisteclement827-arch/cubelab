@@ -1,10 +1,12 @@
 // Registre des puzzles. Pour en activer un nouveau : available: true + une fonction scramble (async).
+// algSets : ensembles d'algos proposés dans l'onglet Algos pour ce puzzle.
 import { randomMoveScramble } from '../core/scramble.js';
 import { solver } from '../solver/client.js';
 
 export const PUZZLES = {
   '333': {
     id: '333', name: '3x3', n: 3, available: true,
+    algSets: [{ id: 'oll', name: 'OLL' }],
     async scramble({ type = 'random-state' } = {}) {
       if (type === 'random-move') return randomMoveScramble({ length: 25 });
       try {

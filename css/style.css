@@ -213,6 +213,14 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .gen-results td.alg { font-family: var(--mono); font-size: 15px; overflow-wrap: anywhere; }
 .gen-results td.actions { white-space: nowrap; }
 
+/* ---------- Algos ---------- */
+#view-algos { padding: 16px; overflow: auto; }
+.algos { width: 100%; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.algos-head { padding: 12px 14px; display: flex; align-items: center; gap: 12px 28px; flex-wrap: wrap; }
+.algos-pick { display: flex; align-items: center; gap: 10px; }
+.algos-label { font-weight: 600; }
+.algos-head .chip span { min-width: 56px; padding: 6px 12px; font-family: inherit; font-size: 15px; }
+
 /* ---------- Dialogues ---------- */
 dialog {
   border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
@@ -262,6 +270,6 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .scramble-bar { flex-direction: column; align-items: stretch; }
   .preview { align-self: center; width: min(240px, 100%); }
   .lab-grid, .gen-grid { grid-template-columns: 1fr; }
-  #view-gen { padding: 12px 16px; overflow: auto; }
+  #view-gen, #view-algos { padding: 12px 16px; overflow: auto; }
   .gen-results td.actions .btn { padding: 2px 4px; }
 }

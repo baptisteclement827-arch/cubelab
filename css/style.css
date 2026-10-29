@@ -219,6 +219,14 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .algos-head { padding: 12px 14px; display: flex; align-items: center; gap: 12px 28px; flex-wrap: wrap; }
 .algos-pick { display: flex; align-items: center; gap: 10px; }
 .algos-label { font-weight: 600; }
+.algos-list { display: flex; flex-direction: column; gap: 12px; }
+.subset { padding: 12px 14px 14px; }
+.subset h2 { margin: 0 0 10px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
+.subset h2 .muted { font-size: 13px; font-weight: 500; }
+.case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.case { margin: 0; padding: 8px; border-radius: 10px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.case .ll { width: 100%; max-width: 110px; height: auto; display: block; }
+.case figcaption { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .algos-head .chip span { min-width: 56px; padding: 6px 12px; font-family: inherit; font-size: 15px; }
 
 /* ---------- Dialogues ---------- */
@@ -271,5 +279,6 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .preview { align-self: center; width: min(240px, 100%); }
   .lab-grid, .gen-grid { grid-template-columns: 1fr; }
   #view-gen, #view-algos { padding: 12px 16px; overflow: auto; }
+  .case-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .gen-results td.actions .btn { padding: 2px 4px; }
 }

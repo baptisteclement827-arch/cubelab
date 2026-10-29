@@ -26,3 +26,25 @@ export function renderNet(state, n) {
   const h = 3 * n + 2 * gap;
   return `<svg class="net" viewBox="-0.1 -0.1 ${w + 0.2} ${h + 0.2}" role="img" aria-label="Patron du cube">${out}</svg>`;
 }
+
+// Vue de dessus de la dernière couche (face U + bande du haut des 4 faces latérales), arrière en haut.
+// Mode « oll » : seules les facettes de la couleur du haut sont colorées (en jaune, convention des fiches OLL).
+const TOP = '#ffd500';
+const OFF = '#3a3f4a';
+
+export function renderLL(state) {
+  const color = i => (state[i] === 0 ? TOP : OFF);
+  const cell = (x, y, w, h, i) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="0.1" fill="${color(i)}"/>`;
+  const s = 0.94; // taille d'une facette du dessus (pas de 1)
+  const t = 0.3;  // épaisseur des bandes latérales
+  let out = '';
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out += cell(c + 0.03, r + 0.03, s, s, r * 3 + c);
+  for (let k = 0; k < 3; k++) {
+    out += cell(k + 0.03, 3.08, s, t, 18 + k);       // F : de gauche à droite
+    out += cell(3.08, 2 - k + 0.03, t, s, 9 + k);    // R : de l'avant vers l'arrière
+    out += cell(2 - k + 0.03, -0.08 - t, s, t, 45 + k); // B : de droite à gauche
+    out += cell(-0.08 - t, k + 0.03, t, s, 36 + k);  // L : de l'arrière vers l'avant
+  }
+  const m = t + 0.12;
+  return `<svg class="ll" viewBox="${-m} ${-m} ${3 + 2 * m} ${3 + 2 * m}" role="img" aria-label="Vue de dessus de la dernière couche">${out}</svg>`;
+}

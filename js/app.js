@@ -1,11 +1,12 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
-import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=3';
+import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=4';
 import * as Store from './storage.js';
 import * as Stats from './stats.js';
 import { Timer } from './timer.js';
-import { renderNet } from './render2d.js';
+import { renderNet, renderLL } from './render2d.js?v=4';
+import { ALG_SETS, caseState as algCaseState } from './algsets/index.js';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -388,6 +389,32 @@ function renderAlgos() {
   if (!sets.some(s => s.id === algosSet)) algosSet = sets[0]?.id;
   $('#algos-puzzle').innerHTML = radioChips('algos-puzzle', Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
   $('#algos-set').innerHTML = radioChips('algos-set', sets, algosSet);
+  renderAlgoList();
+}
+
+// Les schémas sont calculés une seule fois (57 cas OLL).
+const caseImages = new Map();
+const caseImage = c => {
+  if (!caseImages.has(c.id)) caseImages.set(c.id, renderLL(algCaseState(c.alg)));
+  return caseImages.get(c.id);
+};
+
+function renderAlgoList() {
+  const set = ALG_SETS[`${algosPuzzle}/${algosSet}`];
+  if (!set) {
+    $('#algos-list').innerHTML = '<p class="empty">Aucun ensemble d\'algos pour ce cube pour l\'instant.</p>';
+    return;
+  }
+  $('#algos-list').innerHTML = set.SUBSETS.map(sub => {
+    const cases = set.CASES.filter(c => c.subset === sub.id);
+    if (!cases.length) return '';
+    return `<section class="card subset">
+      <h2>${esc(sub.name)} <span class="muted">${cases.length}</span></h2>
+      <div class="case-grid">${cases.map(c => `<figure class="case" title="${esc(c.alg)}">
+        ${caseImage(c)}<figcaption>${esc(c.name)}</figcaption>
+      </figure>`).join('')}</div>
+    </section>`;
+  }).join('');
 }
 
 $('#algos-puzzle').addEventListener('change', e => { algosPuzzle = e.target.value; renderAlgos(); });

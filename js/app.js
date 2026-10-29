@@ -350,7 +350,8 @@ $('#import-file').onchange = async e => {
 };
 
 /* ---------- Onglets ---------- */
-// Le puzzle et la session ne concernent que le timer (et bientôt les stats).
+// Le choix du puzzle concerne le timer, les stats et les algos ; la session seulement le timer et les stats.
+const TABS_WITH_PUZZLE = ['timer', 'stats', 'algos'];
 const TABS_WITH_SESSION = ['timer', 'stats'];
 
 document.querySelectorAll('.tab[data-tab]').forEach(tab => {
@@ -363,7 +364,8 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     });
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${activeTab}`));
     $('#page-title').textContent = tab.dataset.title;
-    $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
+    $('.selectors').hidden = !TABS_WITH_PUZZLE.includes(activeTab);
+    $('#session').hidden = !TABS_WITH_SESSION.includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
   };

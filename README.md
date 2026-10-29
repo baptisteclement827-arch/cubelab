@@ -2,7 +2,13 @@
 
 Environnement de speedcubing : timer, stats, labo d'algos. Sans dépendance, sans build.
 
-## Lancer
+## En ligne
+
+https://baptisteclement827-arch.github.io/cubelab/ (GitHub Pages, mis à jour à chaque push sur `main`).
+
+Le dossier de travail est `Mon Drive/CubeLab` ; les données git sont hors de Drive (`C:\Users\bapti\.git-repos\cubelab`).
+
+## Lancer en local
 
 ```bash
 python -m http.server 8333

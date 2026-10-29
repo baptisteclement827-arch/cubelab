@@ -6,6 +6,7 @@ import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
+import { connectMoyu32 } from './devices/moyu32.js?v=18';
 import { picker } from './picker.js?v=16';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
@@ -87,7 +88,8 @@ async function newScramble() {
   if (token !== scrambleToken) return;
   scramble = s;
   $('#scramble').textContent = scramble;
-  $('#preview').innerHTML = renderNet(cube().applyAlg(cube().solved(), scramble), cube().n);
+  smartScrambleChanged();
+  renderPreview();
 }
 
 function resetScrambles() {
@@ -155,7 +157,7 @@ function showLastTime() {
 
 /* ---------- Timer ---------- */
 const HINTS = {
-  idle: () => (settings().inspection ? 'Espace pour lancer l\'inspection' : 'Maintiens Espace puis relâche pour démarrer'),
+  idle: () => smartHint() || (settings().inspection ? 'Espace pour lancer l\'inspection' : 'Maintiens Espace puis relâche pour démarrer'),
   inspect: () => 'Maintiens Espace puis relâche pour démarrer · Échap pour annuler',
   hold: () => 'Attends le vert…',
   ready: () => 'Relâche pour démarrer',
@@ -195,7 +197,10 @@ const timer = new Timer({
     if (v.state === 'ready' && v.inspection !== undefined) $('#timer-hint').textContent = HINTS.ready();
   },
   onSolve({ ms, penalty }) {
-    session().solves.push({ t: ms, p: penalty, s: scramble, d: Date.now() });
+    const solve = { t: ms, p: penalty, s: scramble, d: Date.now() };
+    if (smart.solveMoves?.length) solve.mv = smart.solveMoves; // mouvements du cube connecté : [mouvement, ms depuis le départ]
+    smart.solveMoves = null;
+    session().solves.push(solve);
     persist();
     renderStats();
     showLastTime();
@@ -251,10 +256,11 @@ const GAN_EVENTS = {
 function setDeviceStatus(status) {
   const btn = $('#device-btn');
   btn.dataset.status = status;
-  $('#device-label').textContent = {
+  // « Connecter le » est masqué sur mobile pour que les boutons tiennent sur une ligne.
+  $('#device-label').innerHTML = {
     connected: 'Timer GAN',
     connecting: 'Connexion…',
-    disconnected: 'Connecter le timer',
+    disconnected: '<span class="long">Connecter le timer</span><span class="short">Timer</span>',
   }[status];
   btn.title = status === 'connected' ? 'Cliquer pour déconnecter' : '';
 }
@@ -289,6 +295,123 @@ $('#device-btn').onclick = async () => {
   }
 };
 setDeviceStatus('disconnected');
+
+/* ---------- Cube connecté (MoYu WeiLong V10 AI) ---------- */
+// L'état du vrai cube est suivi mouvement par mouvement. Dans le Timer : le mélange fait est détecté,
+// le chrono part au premier mouvement (après l'inspection si elle est activée) et s'arrête cube résolu.
+const smart = { conn: null, state: null, phase: 'idle', solveMoves: null, start: 0, battery: null };
+const cube3 = new NxNCube(3);
+const faceletsToState = f => Uint8Array.from(f, c => 'URFDLB'.indexOf(c));
+const sameState = (a, b) => a && b && a.every((v, i) => v === b[i]);
+const scrambleState = () => cube3.applyAlg(cube3.solved(), scramble || '');
+// Le cube pilote le chrono seulement si le timer GAN n'est pas connecté.
+const smartTimes = () => !!smart.conn && !ganTimer && activeTab === 'timer';
+
+function setCubeStatus(status) {
+  $('#cube-btn').dataset.status = status;
+  $('#cube-label').innerHTML = status === 'connected'
+    ? `Cube<span class="long"> MoYu</span>${smart.battery != null ? ` · ${smart.battery} %` : ''}`
+    : status === 'connecting' ? 'Connexion…' : '<span class="long">Connecter le cube</span><span class="short">Cube</span>';
+  $('#cube-btn').title = status === 'connected' ? 'Cliquer pour déconnecter' : '';
+  $('#smart-bar').hidden = status !== 'connected';
+  renderPreview();
+}
+
+function renderPreview() {
+  const live = smart.conn && smart.state;
+  $('#preview').innerHTML = renderNet(live ? smart.state : cube().applyAlg(cube().solved(), scramble || ''), cube().n);
+  $('#preview').classList.toggle('live', !!live);
+  if (smartTimes() && (timer.state === 'idle' || timer.state === 'stopped')) $('#timer-hint').textContent = HINTS.idle();
+}
+
+// Texte sous le chrono quand le cube connecté pilote le Timer.
+function smartHint() {
+  if (!smartTimes()) return '';
+  if (!smart.state) return 'Lecture de l\'état du cube…';
+  return smart.phase === 'ready' ? 'Mélange fait : le chrono part au premier mouvement' : 'Fais le mélange sur le cube';
+}
+
+// Nouveau mélange : on attend que le vrai cube y arrive.
+function smartScrambleChanged() {
+  if (!smart.conn || smart.phase === 'running') return;
+  smart.phase = 'scrambling';
+  checkScrambled();
+}
+
+function checkScrambled() {
+  if (smart.phase !== 'scrambling' || !smartTimes() || !sameState(smart.state, scrambleState())) return;
+  smart.phase = 'ready';
+  if (settings().inspection && timer.state !== 'running') timer.startInspection();
+}
+
+function onSmartMove(move) {
+  smart.state = cube3.apply(smart.state, parseAlg(move));
+  const now = performance.now();
+  if (smartTimes()) {
+    if (smart.phase === 'ready') {
+      // Premier mouvement après le mélange : départ.
+      timer.device({ kind: 'start' });
+      smart.phase = 'running';
+      smart.start = now;
+      smart.solveMoves = [];
+    }
+    if (smart.phase === 'running') {
+      smart.solveMoves.push([move, Math.round(now - smart.start)]);
+      if (cube3.isSolved(smart.state)) {
+        smart.phase = 'scrambling';
+        timer.device({ kind: 'stop', ms: Math.floor(now - timer.startTime) });
+      }
+    } else if (smart.phase === 'scrambling') {
+      checkScrambled();
+    }
+  }
+  renderPreview();
+}
+
+$('#cube-btn').onclick = async () => {
+  if (smart.conn) {
+    if (!confirm('Déconnecter le cube ?')) return;
+    smart.conn.disconnect();
+    smart.conn = null;
+    smart.phase = 'idle';
+    setCubeStatus('disconnected');
+    return;
+  }
+  if (!bluetoothAvailable()) {
+    alert('Ce navigateur ne gère pas le Bluetooth. Utilise Chrome ou Edge (ordinateur ou Android).');
+    return;
+  }
+  setCubeStatus('connecting');
+  try {
+    smart.conn = await connectMoyu32({
+      onEvent(evt) {
+        if (evt.type === 'state') { smart.state = faceletsToState(evt.facelets); checkScrambled(); renderPreview(); }
+        else if (evt.type === 'battery') { smart.battery = evt.level; setCubeStatus('connected'); }
+        else if (evt.type === 'move' && smart.state) onSmartMove(evt.move);
+      },
+      onStatus(status) { if (smart.conn || status === 'connected') setCubeStatus(status); },
+      askMac(name, guess) {
+        return prompt(`Adresse MAC du cube ${name} introuvable automatiquement (ou incorrecte).\n`
+          + 'Elle est visible dans l\'appli MoYu, ou sous la forme CF:30:16:00:XX:XX.', guess || 'CF:30:16:00:');
+      },
+    });
+    smart.phase = 'scrambling';
+    setCubeStatus('connected');
+    checkScrambled();
+  } catch (err) {
+    smart.conn = null;
+    setCubeStatus('disconnected');
+    if (err.name !== 'NotFoundError') alert(`Connexion impossible : ${err.message}`);
+  }
+};
+// Recaler : le vrai cube est résolu, on repart de l'état résolu.
+$('#smart-sync').onclick = () => {
+  smart.state = cube3.solved();
+  if (smart.phase !== 'running') smart.phase = 'scrambling';
+  checkScrambled();
+  renderPreview();
+};
+setCubeStatus('disconnected');
 
 /* ---------- Boutons ---------- */
 // Évite qu'Espace ne « clique » sur le dernier bouton focalisé.
@@ -440,6 +563,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     $('#page-title').textContent = tab.dataset.title;
     $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
     $('#device-btn').hidden = !['timer', 'trainer'].includes(activeTab);
+    $('#cube-btn').hidden = !['timer', 'trainer'].includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
     if (activeTab === 'trainer') renderTrainer();

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 <div class="app">
@@ -48,6 +48,9 @@
   <button type="button" id="device-btn" class="device-btn">
     <span class="device-dot"></span><span id="device-label">Connecter le timer</span>
   </button>
+  <button type="button" id="cube-btn" class="device-btn">
+    <span class="device-dot"></span><span id="cube-label">Connecter le cube</span>
+  </button>
   <div class="selectors">
     <div id="puzzle"></div>
     <div id="session"></div>
@@ -89,6 +92,9 @@
       </div>
 
       <div id="preview" class="preview"></div>
+      <div id="smart-bar" class="smart-bar" hidden>
+        <button type="button" class="btn ghost" id="smart-sync" title="À utiliser si le cube affiché ne correspond plus au vrai cube">Le cube est résolu</button>
+      </div>
     </div>
   </section>
 
@@ -322,6 +328,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=17"></script>
+<script type="module" src="js/app.js?v=18"></script>
 </body>
 </html>

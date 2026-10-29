@@ -41,5 +41,6 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/stats.js` : moyennes WCA (ao5, ao12, ...), formatage
 - `js/storage.js` : localStorage + export/import JSON
 - `js/devices/gan-timer.js` : GAN Smart Timer en Bluetooth (Chrome / Edge), protocole d'après afedotov/gan-web-bluetooth (MIT)
+- `js/devices/moyu32.js` + `aes128.js` : cube MoYu WeiLong V10 AI en Bluetooth (protocole MoYu32 d'après csTimer)
 - `js/picker.js` : menu déroulant maison (sélecteurs de l'onglet Algos)
 - `js/app.js` : interface

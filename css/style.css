@@ -87,12 +87,18 @@ body {
   font: inherit; font-size: 14px; font-weight: 600; color: var(--text);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px;
 }
-.device-btn[hidden] { display: none; }
+.device-btn[hidden], .device-btn .short { display: none; }
 .device-btn:hover { border-color: var(--muted); }
 .device-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .device-btn[data-status="connected"] .device-dot { background: var(--ready); }
 .device-btn[data-status="connecting"] .device-dot { background: var(--inspect); }
-.device-btn:not([hidden]) + .selectors { margin-left: 0; }
+.device-btn + .device-btn { margin-left: 0; }
+.device-btn:not([hidden]) ~ .selectors { margin-left: 0; }
+.smart-bar { align-self: flex-end; width: 240px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 14px; color: var(--muted); }
+.smart-bar[hidden] { display: none; }
+.smart-bar .btn { font-size: 13px; padding: 3px 10px; }
+.preview.live { outline: 2px solid var(--ready); outline-offset: 6px; border-radius: 6px; }
+body.solving .smart-bar { visibility: hidden; }
 .selectors { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .selectors[hidden] { display: none; }
 .selectors .picker-list { left: auto; right: 0; }
@@ -399,6 +405,10 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .topbar { gap: 10px; min-height: 0; }
   .topbar h1 { font-size: 16px; }
   .selectors { margin-left: 0; width: 100%; }
+  .topbar { gap: 8px 10px; }
+  .device-btn { padding: 6px 10px; font-size: 13px; }
+  .device-btn .long { display: none; }
+  .device-btn .short { display: inline; }
   .selectors .picker { flex: 1; min-width: 0; }
   .selectors .picker-btn { width: 100%; min-width: 0; }
   /* column + order (pas column-reverse : le haut deviendrait inaccessible au défilement) */
@@ -414,6 +424,7 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .scramble-actions { flex-direction: row; }
   .scramble-bar { flex-direction: column; align-items: stretch; }
   .preview { align-self: center; width: min(240px, 100%); }
+  .smart-bar { align-self: center; }
   .lab-grid, .gen-grid { grid-template-columns: 1fr; }
   #view-gen, #view-algos { padding: 12px 16px; overflow: auto; }
   .case-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

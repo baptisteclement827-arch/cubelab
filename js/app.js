@@ -782,8 +782,23 @@ async function prepareAttempt() {
   return { c, scramble: formatAlg(invertMoves(parseAlg(sol))) };
 }
 
+// Essais déjà affichés : ← revient en arrière, → avance (ou tire un nouveau cas au bout de la liste).
+function showAttempt(attempt) {
+  training.current = attempt;
+  $('#tr-scramble').textContent = attempt.scramble;
+}
+
+function prevAttempt() {
+  const t = training;
+  if (!t || t.pos <= 0) return;
+  showAttempt(t.shown[--t.pos]);
+}
+
 async function nextAttempt() {
   const t = training;
+  if (t.pos < t.shown.length - 1) { showAttempt(t.shown[++t.pos]); return; }
+  if (t.loading) return;
+  t.loading = true;
   const pending = t.next || prepareAttempt();
   t.next = null;
   t.current = null;
@@ -796,10 +811,12 @@ async function nextAttempt() {
     return;
   } finally {
     clearTimeout(slow);
+    t.loading = false;
   }
   if (training !== t) return;
-  t.current = attempt;
-  $('#tr-scramble').textContent = attempt.scramble;
+  t.shown.push(attempt);
+  t.pos = t.shown.length - 1;
+  showAttempt(attempt);
   t.next = prepareAttempt(); // le suivant est prêt d'avance
 }
 
@@ -808,7 +825,7 @@ function startTraining() {
   const set = ALG_SETS[cfg?.set];
   const cases = set ? set.CASES.filter(c => cfg.ids.includes(c.id)) : [];
   if (!cases.length) { training = null; return; }
-  training = { key: cfg.set, set, cases, current: null, next: null };
+  training = { key: cfg.set, set, cases, current: null, next: null, shown: [], pos: -1, loading: false };
   $('#tr-timer').textContent = Stats.fmt(0, { precision: precision() });
   $('#tr-last').hidden = true;
   nextAttempt();
@@ -866,6 +883,12 @@ $('#tr-last').addEventListener('click', e => {
   renderTrainerStats();
 });
 $('#tr-skip').onclick = () => { if (training) nextAttempt(); };
+// Flèches gauche/droite : essai précédent / suivant (chrono à l'arrêt).
+document.addEventListener('keydown', e => {
+  if (activeTab !== 'trainer' || !training || trainerTimer.busy || typing(e) || document.querySelector('dialog[open]')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); nextAttempt(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); prevAttempt(); }
+});
 $('#tr-choose').onclick = () => { showTab('algos'); setSelecting(true); };
 $('#tr-edit').onclick = () => {
   const [puzzle, setId] = (data.trainer?.set || '').split('/');

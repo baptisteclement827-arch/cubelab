@@ -16,7 +16,8 @@
   import engine from './js/tests/engine.test.js';
   import solver from './js/tests/solver.test.js';
   import algsets from './js/tests/algsets.test.js';
-  const results = [...engine, ...solver, ...algsets];
+  import devices from './js/tests/devices.test.js';
+  const results = [...engine, ...solver, ...algsets, ...devices];
   const failed = results.filter(r => !r.ok).length;
   document.getElementById('title').textContent = `${results.length - failed}/${results.length} tests OK`;
   const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);

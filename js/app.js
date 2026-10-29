@@ -4,7 +4,8 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
-import { Timer } from './timer.js?v=12';
+import { Timer } from './timer.js?v=17';
+import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { picker } from './picker.js?v=16';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
@@ -236,6 +237,59 @@ document.addEventListener('pointerdown', e => {
   if (trainerTimer.state === 'running' && !$('#tr-timer-zone').contains(e.target)) trainerTimer.pointerDown();
 });
 
+/* ---------- Timer Bluetooth (GAN Smart Timer) ---------- */
+// Les événements du tapis pilotent le chrono de l'onglet affiché (Timer ou Trainer).
+let ganTimer = null;
+const GAN_EVENTS = {
+  [GAN.HANDS_ON]: 'hands-on',
+  [GAN.GET_SET]: 'ready',
+  [GAN.HANDS_OFF]: 'hands-off',
+  [GAN.RUNNING]: 'start',
+  [GAN.STOPPED]: 'stop',
+};
+
+function setDeviceStatus(status) {
+  const btn = $('#device-btn');
+  btn.dataset.status = status;
+  $('#device-label').textContent = {
+    connected: 'Timer GAN',
+    connecting: 'Connexion…',
+    disconnected: 'Connecter le timer',
+  }[status];
+  btn.title = status === 'connected' ? 'Cliquer pour déconnecter' : '';
+}
+
+$('#device-btn').onclick = async () => {
+  if (ganTimer) {
+    if (!confirm('Déconnecter le timer GAN ?')) return;
+    ganTimer.disconnect();
+    ganTimer = null;
+    setDeviceStatus('disconnected');
+    return;
+  }
+  if (!bluetoothAvailable()) {
+    alert('Ce navigateur ne gère pas le Bluetooth. Utilise Chrome ou Edge (ordinateur ou Android).');
+    return;
+  }
+  setDeviceStatus('connecting');
+  try {
+    ganTimer = await connectGanTimer({
+      onEvent(evt) {
+        const kind = GAN_EVENTS[evt.state];
+        const t = activeTimer();
+        if (kind && t) t.device({ kind, ms: evt.ms });
+      },
+      onStatus(status) { if (ganTimer || status === 'connected') setDeviceStatus(status); },
+    });
+    setDeviceStatus('connected');
+  } catch (err) {
+    ganTimer = null;
+    setDeviceStatus('disconnected');
+    if (err.name !== 'NotFoundError') alert(`Connexion impossible : ${err.message}`); // NotFoundError = fenêtre fermée
+  }
+};
+setDeviceStatus('disconnected');
+
 /* ---------- Boutons ---------- */
 // Évite qu'Espace ne « clique » sur le dernier bouton focalisé.
 document.addEventListener('click', e => { if (e.target.closest('button')) e.target.closest('button').blur(); });
@@ -385,6 +439,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${activeTab}`));
     $('#page-title').textContent = tab.dataset.title;
     $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
+    $('#device-btn').hidden = !['timer', 'trainer'].includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
     if (activeTab === 'trainer') renderTrainer();

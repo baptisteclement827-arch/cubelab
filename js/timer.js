@@ -93,13 +93,44 @@ export class Timer {
     this.loop();
   }
 
-  stop() {
-    this.lastTime = Math.floor(performance.now() - this.startTime);
+  stop(ms) {
+    this.lastTime = ms ?? Math.floor(performance.now() - this.startTime);
     this.state = 'stopped';
-    this.ignoreRelease = true;
+    this.ignoreRelease = ms === undefined; // le relâchement d'Espace qui a arrêté le chrono ne relance rien
     cancelAnimationFrame(this.raf);
     this.emit();
     this.onSolve({ ms: this.lastTime, penalty: this.penalty });
+  }
+
+  // Timer externe (GAN) : mêmes étapes que la barre d'espace ; le temps final vient de l'appareil.
+  device(evt) {
+    switch (evt.kind) {
+      case 'hands-on':
+        if (this.state === 'running') return;
+        if (this.state === 'idle' || this.state === 'stopped' || this.state === 'inspect') {
+          this.state = 'hold';
+          this.emit();
+        }
+        break;
+      case 'ready':
+        if (this.state === 'hold' || this.state === 'idle' || this.state === 'stopped' || this.state === 'inspect') {
+          this.state = 'ready';
+          this.emit();
+        }
+        break;
+      case 'hands-off':
+        if (this.state === 'hold' || this.state === 'ready') {
+          this.state = this.inspStart !== null ? 'inspect' : 'idle';
+          this.emit();
+        }
+        break;
+      case 'start':
+        if (this.state !== 'running') this.start();
+        break;
+      case 'stop':
+        if (this.state === 'running') this.stop(evt.ms);
+        break;
+    }
   }
 
   cancel() {

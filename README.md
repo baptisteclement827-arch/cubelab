@@ -40,5 +40,6 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/timer.js` : machine à états du timer (inspection WCA, maintien, pénalités)
 - `js/stats.js` : moyennes WCA (ao5, ao12, ...), formatage
 - `js/storage.js` : localStorage + export/import JSON
+- `js/devices/gan-timer.js` : GAN Smart Timer en Bluetooth (Chrome / Edge), protocole d'après afedotov/gan-web-bluetooth (MIT)
 - `js/picker.js` : menu déroulant maison (sélecteurs de l'onglet Algos)
 - `js/app.js` : interface

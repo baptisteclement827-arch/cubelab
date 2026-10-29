@@ -22,6 +22,7 @@ function normalize(data) {
   }
   data.settings = { ...DEFAULT_SETTINGS, ...data.settings };
   data.current ||= {};
+  data.algs ||= {}; // { 'puzzle/ensemble': { idCas: { alg, status } } }
   return data;
 }
 

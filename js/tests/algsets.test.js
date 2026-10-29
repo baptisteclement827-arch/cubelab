@@ -1,7 +1,7 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
 import { parseAlg } from '../core/notation.js';
-import { ALG_SETS, caseState } from '../algsets/index.js';
+import { ALG_SETS, caseState, solvesCase } from '../algsets/index.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -68,6 +68,19 @@ test('OLL : arêtes et coins cohérents avec le sous-ensemble', () => {
     if (c.subset === 'co') ok(k === 4, `${c.name} : coins non orientés`);
     if (c.subset === 'ocll') ok(k < 4, `${c.name} : coins déjà orientés`);
   });
+});
+
+test('OLL : vérification de l\'algo de l\'utilisateur', () => {
+  const sune = oll.CASES.find(c => c.id === 'oll27');
+  ok(solvesCase(oll, sune, "R U R' U R U2 R'") === '', 'Sune doit résoudre OLL 27');
+  ok(solvesCase(oll, sune, "U R U R' U R U2 R'") !== null, 'Sune sous un autre angle doit être accepté');
+  ok(solvesCase(oll, sune, "y R U R' U R U2 R'") !== null, 'Sune avec rotation y doit être accepté');
+  const antisune = oll.CASES.find(c => c.id === 'oll26');
+  ok(solvesCase(oll, antisune, "L' U' L U' L' U2 L") !== null, 'Sune gaucher (miroir) doit résoudre OLL 26');
+  ok(solvesCase(oll, sune, "R U2 R' U' R U' R'") === null, 'Antisune ne résout pas OLL 27');
+  let threw = false;
+  try { solvesCase(oll, sune, 'R U ('); } catch { threw = true; }
+  ok(threw, 'Une erreur de syntaxe doit être signalée');
 });
 
 export default results;

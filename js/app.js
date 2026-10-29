@@ -1,12 +1,12 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
-import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=4';
-import * as Store from './storage.js';
+import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=5';
+import * as Store from './storage.js?v=5';
 import * as Stats from './stats.js';
 import { Timer } from './timer.js';
-import { renderNet, renderLL } from './render2d.js?v=4';
-import { ALG_SETS, caseState as algCaseState } from './algsets/index.js';
+import { renderNet, renderLL } from './render2d.js?v=5';
+import { ALG_SETS, caseState as algCaseState, solvesCase } from './algsets/index.js?v=5';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -399,8 +399,37 @@ const caseImage = c => {
   return caseImages.get(c.id);
 };
 
+// Progression de l'utilisateur : algo choisi et statut de chaque cas.
+const STATUSES = [
+  { id: 'unknown', name: 'Inconnu' },
+  { id: 'learning', name: 'En apprentissage' },
+  { id: 'learned', name: 'Appris' },
+];
+const setKey = () => `${algosPuzzle}/${algosSet}`;
+const currentSet = () => ALG_SETS[setKey()];
+const progress = id => data.algs[setKey()]?.[id] || {};
+const myAlg = c => progress(c.id).alg || c.alg;
+const statusOf = c => progress(c.id).status || 'unknown';
+
+function setProgress(id, patch) {
+  const all = (data.algs[setKey()] ||= {});
+  const entry = { ...all[id], ...patch };
+  for (const k of Object.keys(entry)) if (!entry[k]) delete entry[k];
+  if (Object.keys(entry).length) all[id] = entry; else delete all[id];
+  persist();
+}
+
+let openCaseId = null;
+
+function caseButton(c) {
+  const st = statusOf(c);
+  return `<button type="button" class="case ${st}${c.id === openCaseId ? ' open' : ''}" data-case="${c.id}" title="${esc(myAlg(c))}" aria-expanded="${c.id === openCaseId}">
+    ${caseImage(c)}<span class="case-name">${esc(c.name)}</span>
+  </button>`;
+}
+
 function renderAlgoList() {
-  const set = ALG_SETS[`${algosPuzzle}/${algosSet}`];
+  const set = currentSet();
   if (!set) {
     $('#algos-list').innerHTML = '<p class="empty">Aucun ensemble d\'algos pour ce cube pour l\'instant.</p>';
     return;
@@ -410,15 +439,110 @@ function renderAlgoList() {
     if (!cases.length) return '';
     return `<section class="card subset">
       <h2>${esc(sub.name)} <span class="muted">${cases.length}</span></h2>
-      <div class="case-grid">${cases.map(c => `<figure class="case" title="${esc(c.alg)}">
-        ${caseImage(c)}<figcaption>${esc(c.name)}</figcaption>
-      </figure>`).join('')}</div>
+      <div class="case-grid">${cases.map(caseButton).join('')}</div>
     </section>`;
   }).join('');
+  if (openCaseId) placeCasePanel(false);
 }
 
-$('#algos-puzzle').addEventListener('change', e => { algosPuzzle = e.target.value; renderAlgos(); });
-$('#algos-set').addEventListener('change', e => { algosSet = e.target.value; renderAlgos(); });
+// Le panneau du cas s'insère sous la rangée de la case cliquée, sur toute la largeur de la grille.
+function placeCasePanel(scroll) {
+  const set = currentSet();
+  const c = set?.CASES.find(x => x.id === openCaseId);
+  const btn = c && document.querySelector(`.case[data-case="${c.id}"]`);
+  document.querySelector('.case-panel')?.remove();
+  if (!btn) { openCaseId = null; return; }
+  const row = [...btn.parentElement.children].filter(el => el.classList.contains('case') && el.offsetTop === btn.offsetTop);
+  const panel = document.createElement('div');
+  panel.className = 'case-panel';
+  panel.innerHTML = `
+    <div class="case-panel-img">${caseImage(c)}</div>
+    <div class="case-panel-body">
+      <div class="case-panel-head">
+        <h3>${esc(c.name)}</h3>
+        <button type="button" class="btn ghost" data-close-case>Fermer</button>
+      </div>
+      <label class="stack">Mon algo
+        <textarea class="case-alg" rows="2" spellcheck="false" placeholder="${esc(c.alg)}">${esc(progress(c.id).alg || '')}</textarea>
+      </label>
+      <p class="case-check muted"></p>
+      <div class="status-pick" role="radiogroup" aria-label="État">
+        ${STATUSES.map(s => `<label class="chip status-${s.id}"><input type="radio" name="case-status" value="${s.id}" ${s.id === statusOf(c) ? 'checked' : ''}><span>${s.name}</span></label>`).join('')}
+      </div>
+    </div>`;
+  row.at(-1).after(panel);
+  checkCaseAlg(panel, set, c);
+  if (scroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function checkCaseAlg(panel, set, c) {
+  const input = panel.querySelector('.case-alg');
+  const out = panel.querySelector('.case-check');
+  const alg = input.value.trim();
+  out.className = 'case-check';
+  if (!alg) {
+    out.innerHTML = `Algo par défaut : <code>${esc(c.alg)}</code>`;
+    out.classList.add('muted');
+    return;
+  }
+  try {
+    const auf = solvesCase(set, c, alg);
+    if (auf === null) { out.textContent = 'Cet algo ne résout pas ce cas'; out.classList.add('error'); }
+    else { out.textContent = `✓ Résout le cas${auf ? ` (en faisant ${auf} avant, par rapport au schéma)` : ''}`; out.classList.add('ok'); }
+  } catch (e) {
+    out.textContent = e.message;
+    out.classList.add('error');
+  }
+}
+
+function openCase(id) {
+  openCaseId = openCaseId === id ? null : id;
+  document.querySelectorAll('.case[data-case]').forEach(b => {
+    const open = b.dataset.case === openCaseId;
+    b.classList.toggle('open', open);
+    b.setAttribute('aria-expanded', open);
+  });
+  if (openCaseId) placeCasePanel(true); else document.querySelector('.case-panel')?.remove();
+}
+
+function refreshCaseButton(c) {
+  document.querySelector(`.case[data-case="${c.id}"]`)?.replaceWith(
+    Object.assign(document.createElement('template'), { innerHTML: caseButton(c).trim() }).content.firstChild);
+}
+
+$('#algos-list').addEventListener('click', e => {
+  const b = e.target.closest('.case[data-case]');
+  if (b) openCase(b.dataset.case);
+  else if (e.target.closest('[data-close-case]')) openCase(openCaseId);
+});
+$('#algos-list').addEventListener('input', e => {
+  if (!e.target.matches('.case-alg')) return;
+  const set = currentSet();
+  const c = set.CASES.find(x => x.id === openCaseId);
+  const panel = e.target.closest('.case-panel');
+  checkCaseAlg(panel, set, c);
+  // On n'enregistre que les algos valides (ou vide = algo par défaut).
+  const alg = e.target.value.trim();
+  if (!panel.querySelector('.case-check').classList.contains('error')) {
+    setProgress(c.id, { alg });
+    refreshCaseButton(c);
+  }
+});
+$('#algos-list').addEventListener('change', e => {
+  if (e.target.name !== 'case-status') return;
+  const c = currentSet().CASES.find(x => x.id === openCaseId);
+  setProgress(c.id, { status: e.target.value === 'unknown' ? '' : e.target.value });
+  refreshCaseButton(c);
+});
+// La rangée change avec la largeur : on replace le panneau.
+let lastWidth = innerWidth;
+addEventListener('resize', () => {
+  if (innerWidth !== lastWidth && openCaseId && activeTab === 'algos') placeCasePanel(false);
+  lastWidth = innerWidth;
+});
+
+$('#algos-puzzle').addEventListener('change', e => { algosPuzzle = e.target.value; openCaseId = null; renderAlgos(); });
+$('#algos-set').addEventListener('change', e => { algosSet = e.target.value; openCaseId = null; renderAlgos(); });
 renderAlgos();
 
 /* ---------- Labo d'algos ---------- */

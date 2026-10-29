@@ -224,9 +224,38 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .subset h2 { margin: 0 0 10px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
 .subset h2 .muted { font-size: 13px; font-weight: 500; }
 .case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
-.case { margin: 0; padding: 8px; border-radius: 10px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.case {
+  margin: 0; padding: 8px; border-radius: 10px; background: var(--surface-2); border: 2px solid transparent;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--text); cursor: pointer;
+}
+.case:hover { border-color: var(--border); }
+.case.open { border-color: var(--accent); }
 .case .ll { width: 100%; max-width: 110px; height: auto; display: block; }
-.case figcaption { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.case-name { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 5px; }
+/* Pastille d'état : orange = en apprentissage, vert = appris. */
+.case.learning .case-name::before, .case.learned .case-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+.case.learning .case-name::before { background: var(--inspect); }
+.case.learned .case-name::before { background: var(--ready); }
+
+.case-panel {
+  grid-column: 1 / -1; display: flex; gap: 16px; padding: 14px; border-radius: 10px;
+  border: 2px solid var(--accent); background: var(--surface); scroll-margin: 16px;
+}
+.case-panel-img { width: 130px; flex-shrink: 0; }
+.case-panel-img .ll { width: 100%; height: auto; display: block; }
+.case-panel-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.case-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.case-panel-head h3 { margin: 0; font-size: 18px; }
+.case-panel .stack { font-weight: 600; font-size: 14px; }
+.case-alg { font-family: var(--mono); font-size: 16px; font-weight: 400; resize: vertical; width: 100%; }
+.case-check { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.case-check code { font-family: var(--mono); color: var(--text); }
+.case-check.ok { color: var(--ready); font-weight: 600; }
+.case-check.error { color: var(--danger); }
+.status-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.status-pick .chip span { font-family: inherit; padding: 6px 12px; }
+.status-pick .status-learning input:checked + span { background: var(--inspect); }
+.status-pick .status-learned input:checked + span { background: var(--ready); }
 .algos-head .chip span { min-width: 56px; padding: 6px 12px; font-family: inherit; font-size: 15px; }
 
 /* ---------- Dialogues ---------- */
@@ -280,5 +309,8 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .lab-grid, .gen-grid { grid-template-columns: 1fr; }
   #view-gen, #view-algos { padding: 12px 16px; overflow: auto; }
   .case-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .case-panel { flex-direction: column; align-items: center; padding: 12px; }
+  .case-panel-img { width: 120px; }
+  .case-panel-body { width: 100%; }
   .gen-results td.actions .btn { padding: 2px 4px; }
 }

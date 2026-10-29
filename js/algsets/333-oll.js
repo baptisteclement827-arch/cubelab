@@ -1,20 +1,20 @@
-// Les 57 cas OLL du 3x3, rangés par sous-ensemble. alg = algo par défaut qui résout le cas.
+// Les 57 cas OLL du 3x3, rangés par sous-ensemble (noms anglais usuels). alg = algo par défaut qui résout le cas.
 export const SUBSETS = [
-  { id: 'dot', name: 'Point' },
-  { id: 'ocll', name: 'Croix (OCLL)' },
-  { id: 'co', name: 'Coins orientés' },
-  { id: 'square', name: 'Carré' },
-  { id: 'lightning', name: 'Petit éclair' },
-  { id: 'fish', name: 'Poisson' },
-  { id: 'knight', name: 'Cavalier' },
+  { id: 'dot', name: 'Dot' },
+  { id: 'ocll', name: 'OCLL' },
+  { id: 'co', name: 'All Corners Oriented' },
+  { id: 'square', name: 'Square' },
+  { id: 'lightning', name: 'Small Lightning Bolt' },
+  { id: 'fish', name: 'Fish' },
+  { id: 'knight', name: 'Knight Move' },
   { id: 'awkward', name: 'Awkward' },
-  { id: 'p', name: 'P' },
-  { id: 't', name: 'T' },
-  { id: 'c', name: 'C' },
-  { id: 'w', name: 'W' },
-  { id: 'z', name: 'Z (grand éclair)' },
-  { id: 'l', name: 'Petit L' },
-  { id: 'i', name: 'Ligne (I)' },
+  { id: 'p', name: 'P Shape' },
+  { id: 't', name: 'T Shape' },
+  { id: 'c', name: 'C Shape' },
+  { id: 'w', name: 'W Shape' },
+  { id: 'z', name: 'Big Lightning Bolt' },
+  { id: 'l', name: 'Small L Shape' },
+  { id: 'i', name: 'I Shape' },
 ];
 
 const RAW = [

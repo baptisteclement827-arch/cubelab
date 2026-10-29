@@ -265,6 +265,9 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case-alg-text { position: relative; font-family: var(--mono); font-size: 16px; overflow-wrap: anywhere; }
 .case-alg { font-family: var(--mono); font-size: 16px; font-weight: 400; resize: vertical; width: 100%; }
 .case-check { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.case-times { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.case-times p { margin: 0; flex: 1; min-width: 200px; }
+.case-times .btn { font-size: 13px; padding: 3px 10px; }
 .case-check code { font-family: var(--mono); color: var(--text); }
 .case-check.ok { color: var(--ready); font-weight: 600; }
 .case-check.error { color: var(--danger); }
@@ -319,8 +322,8 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .status-btn.on { border-color: var(--accent); color: var(--accent); }
 .status-btn.status-learning.on { border-color: var(--inspect); color: var(--inspect); }
 .status-btn.status-learned.on { border-color: var(--ready); color: var(--ready); }
-.subset-toggle { display: none; margin-left: auto; font-size: 13px; padding: 2px 10px; }
-.selecting .subset-toggle { display: inline-block; }
+.selecting .subset h2 { cursor: pointer; }
+.selecting .subset h2:hover { color: var(--accent); }
 .selecting .case { opacity: 0.55; }
 .selecting .case.selected { opacity: 1; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
 
@@ -328,6 +331,7 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 #view-trainer { gap: 16px; padding: 16px; }
 #view-trainer.empty > :not(#tr-empty), #view-trainer:not(.empty) > #tr-empty { display: none; }
 .tr-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.tr-info-btns .btn { flex: 1; }
 #tr-summary { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .tr-stats th, .tr-stats td { padding-left: 6px; padding-right: 8px; }
 .tr-last { display: flex; align-items: center; gap: 14px; padding: 10px 14px; }

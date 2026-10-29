@@ -465,8 +465,7 @@ function renderAlgoList() {
     const cases = set.CASES.filter(c => c.subset === sub.id);
     if (!cases.length) return '';
     return `<section class="card subset">
-      <h2>${esc(sub.name)} <span class="muted">${cases.length}</span>
-        <button type="button" class="btn ghost subset-toggle" data-subset-toggle="${sub.id}">${cases.every(c => selection.has(c.id)) ? 'Retirer' : 'Tout le subset'}</button></h2>
+      <h2 data-subset-toggle="${sub.id}">${esc(sub.name)} <span class="muted">${cases.length}</span></h2>
       <div class="case-grid">${cases.map(caseButton).join('')}</div>
     </section>`;
   }).join('');
@@ -499,7 +498,10 @@ function placeCasePanel(scroll) {
         </div>
       </div>
       <p class="case-check muted"></p>
-      <p class="case-times muted">${caseTimesText(progress(c.id).times)}</p>
+      <div class="case-times">
+        <p class="muted">${caseTimesText(progress(c.id).times)}</p>
+        ${progress(c.id).times?.length ? '<button type="button" class="btn ghost danger" data-clear-times>Supprimer les stats</button>' : ''}
+      </div>
       <div class="status-pick" role="radiogroup" aria-label="État">
         ${STATUSES.map(s => `<label class="chip status-${s.id}"><input type="radio" name="case-status" value="${s.id}" ${s.id === statusOf(c) ? 'checked' : ''}><span>${s.name}</span></label>`).join('')}
       </div>
@@ -597,6 +599,12 @@ $('#algos-list').addEventListener('click', e => {
   else if (selecting && sub) toggleSelect(currentSet().CASES.filter(c => c.subset === sub.dataset.subsetToggle).map(c => c.id));
   else if (b) openCase(b.dataset.case);
   else if (e.target.closest('[data-close-case]')) openCase(openCaseId);
+  else if (e.target.closest('[data-clear-times]')) {
+    const c = currentSet().CASES.find(x => x.id === openCaseId);
+    if (!confirm(`Supprimer les ${progress(c.id).times.length} temps d'entraînement de ${c.name} ?`)) return;
+    setProgress(c.id, { times: null });
+    placeCasePanel(false);
+  }
 });
 $('#algos-list').addEventListener('input', e => {
   if (!e.target.matches('.case-alg')) return;
@@ -666,9 +674,9 @@ addEventListener('resize', () => {
 /* ---------- Train : sélection des cas ---------- */
 let selecting = false;
 const selection = new Set();
-const SCRAMBLE_MODES = [{ id: 'inverse', name: 'Inverse de mon algo' }, { id: 'random', name: 'Aléatoire' }];
-const DISTRIBUTIONS = [{ id: 'realistic', name: 'Réaliste' }, { id: 'balanced', name: 'Équilibrée' }];
-const trainOpts = { scramble: data.trainer?.scramble || 'inverse', dist: data.trainer?.dist || 'realistic' };
+const SCRAMBLE_MODES = [{ id: 'inverse', name: 'Reverse' }, { id: 'random', name: 'Aléatoire' }];
+const DISTRIBUTIONS = [{ id: 'balanced', name: 'Équilibrée' }, { id: 'realistic', name: 'Réaliste' }];
+const trainOpts = { scramble: data.trainer?.scramble || 'inverse', dist: data.trainer?.dist || 'balanced' };
 const scramblePicker = picker($('#train-scramble'), { label: 'Mélange', onChange(id) { trainOpts.scramble = id; } });
 const distPicker = picker($('#train-dist'), { label: 'Répartition', onChange(id) { trainOpts.dist = id; } });
 
@@ -721,7 +729,7 @@ $('#train-status').addEventListener('click', e => {
 });
 $('#train-start').onclick = () => {
   if (!selection.size) return;
-  data.trainer = { set: setKey(), ids: [...selection], scramble: trainOpts.scramble, dist: trainOpts.dist };
+  data.trainer = { set: setKey(), ids: [...selection], scramble: trainOpts.scramble, dist: trainOpts.dist, active: true };
   persist();
   setSelecting(false);
   training = null;
@@ -822,7 +830,8 @@ async function nextAttempt() {
 
 function startTraining() {
   const cfg = data.trainer;
-  const set = ALG_SETS[cfg?.set];
+  if (!cfg || cfg.active === false) { training = null; return; }
+  const set = ALG_SETS[cfg.set];
   const cases = set ? set.CASES.filter(c => cfg.ids.includes(c.id)) : [];
   if (!cases.length) { training = null; return; }
   training = { key: cfg.set, set, cases, current: null, next: null, shown: [], pos: -1, loading: false };
@@ -890,6 +899,15 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowLeft') { e.preventDefault(); prevAttempt(); }
 });
 $('#tr-choose').onclick = () => { showTab('algos'); setSelecting(true); };
+// Quitter : l'entraînement s'arrête, la sélection est gardée pour la prochaine fois.
+$('#tr-quit').onclick = () => {
+  trainerTimer.cancel();
+  if (data.trainer) data.trainer.active = false;
+  persist();
+  training = null;
+  trHistory.length = 0;
+  showTab('algos');
+};
 $('#tr-edit').onclick = () => {
   const [puzzle, setId] = (data.trainer?.set || '').split('/');
   if (PUZZLES[puzzle]) { algosPuzzle = puzzle; algosSet = setId; }

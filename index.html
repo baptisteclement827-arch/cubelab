@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=12">
+<link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
 <div class="app">
@@ -180,7 +180,7 @@
       <div class="card algos-head">
         <div id="algos-puzzle"></div>
         <div id="algos-set"></div>
-        <button id="train-btn" class="btn primary train-btn">Train</button>
+        <button id="train-btn" class="btn primary train-btn">S'entraîner</button>
       </div>
       <div id="train-bar" class="card train-bar" hidden>
         <div class="train-row">
@@ -210,13 +210,16 @@
   <section id="view-trainer" class="view">
     <div id="tr-empty" class="placeholder">
       <h2>Trainer</h2>
-      <p>Aucun algo sélectionné. Dans l'onglet Algos, appuie sur Train et choisis les cas à travailler.</p>
+      <p>Aucun algo sélectionné. Dans l'onglet Algos, appuie sur S'entraîner et choisis les cas à travailler.</p>
       <p><button type="button" class="btn primary" id="tr-choose">Choisir des algos</button></p>
     </div>
     <aside class="side tr-side">
       <div class="card tr-info">
         <div id="tr-summary"></div>
-        <button type="button" class="btn" id="tr-edit">Modifier la sélection</button>
+        <div class="row-btns tr-info-btns">
+          <button type="button" class="btn" id="tr-edit">Modifier</button>
+          <button type="button" class="btn danger" id="tr-quit">Quitter</button>
+        </div>
       </div>
       <div class="card solves tr-stats">
         <table>
@@ -313,6 +316,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=13"></script>
+<script type="module" src="js/app.js?v=14"></script>
 </body>
 </html>

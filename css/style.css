@@ -132,6 +132,14 @@ main { flex: 1; min-height: 0; }
 #view-timer { gap: 16px; padding: 16px; }
 .side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .stats { padding: 12px 14px; }
+/* Onglets Timer / Smart au-dessus des stats */
+.seg { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+.seg button {
+  flex: 1; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer;
+  background: none; border: 0; border-radius: 7px; padding: 6px 10px;
+}
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 .stats table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .stats th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding-bottom: 4px; }
 .stats td { padding: 2px 0; }

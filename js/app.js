@@ -98,14 +98,25 @@ function resetScrambles() {
 }
 
 /* ---------- Stats et liste ---------- */
+// Stats séparées : solves au timer (clavier ou timer GAN) et solves au cube connecté (smart).
+const solveSource = s => (s.src === 'smart' || s.mv ? 'smart' : 'timer');
+let statsSource = data.statsSource || 'timer';
+
 function renderStats() {
-  const solves = session().solves;
+  document.querySelectorAll('#stats-source [data-source]').forEach(b => {
+    b.classList.toggle('on', b.dataset.source === statsSource);
+    b.setAttribute('aria-selected', b.dataset.source === statsSource);
+  });
+  // index : position dans la session (pour ouvrir / pénaliser le bon solve).
+  const all = session().solves;
+  const index = all.map((_, i) => i).filter(i => solveSource(all[i]) === statsSource);
+  const solves = index.map(i => all[i]);
   const vals = solves.map(Stats.value);
   const sum = Stats.summary(vals);
   const p = precision();
 
   if (!sum.count) {
-    $('#stats').innerHTML = '<p class="empty">Les stats apparaîtront après ton premier solve.</p>';
+    $('#stats').innerHTML = `<p class="empty">${statsSource === 'smart' ? 'Aucun solve au cube connecté pour l\'instant.' : 'Les stats apparaîtront après ton premier solve.'}</p>`;
   } else {
     $('#stats').innerHTML = `
       <table>
@@ -119,7 +130,7 @@ function renderStats() {
   const rows = [];
   for (let i = solves.length - 1; i >= 0; i--) {
     const isBest = vals[i] === best && best !== Stats.DNF;
-    rows.push(`<tr data-i="${i}">
+    rows.push(`<tr data-i="${index[i]}">
       <td>${i + 1}</td>
       <td class="${isBest ? 'best' : ''}">${Stats.fmtSolve(solves[i], p)}${solves[i].c ? ' *' : ''}</td>
       <td>${Stats.fmt(Stats.avgAt(vals, i, 5), { precision: p, avg: true })}</td>
@@ -198,8 +209,14 @@ const timer = new Timer({
   },
   onSolve({ ms, penalty }) {
     const solve = { t: ms, p: penalty, s: scramble, d: Date.now() };
-    if (smart.solveMoves?.length) solve.mv = smart.solveMoves; // mouvements du cube connecté : [mouvement, ms depuis le départ]
+    if (smart.solveMoves?.length) {
+      solve.src = 'smart';
+      solve.mv = smart.solveMoves; // mouvements du cube connecté : [mouvement, ms depuis le départ]
+    }
     smart.solveMoves = null;
+    // On affiche les stats de la source du solve qui vient d'être fait.
+    statsSource = solveSource(solve);
+    data.statsSource = statsSource;
     session().solves.push(solve);
     persist();
     renderStats();
@@ -432,6 +449,15 @@ $('#last-actions').addEventListener('click', e => {
   else setPenalty(i, b.dataset.pen);
 });
 
+$('#stats-source').addEventListener('click', e => {
+  const b = e.target.closest('[data-source]');
+  if (!b) return;
+  statsSource = b.dataset.source;
+  data.statsSource = statsSource;
+  persist();
+  renderStats();
+});
+
 $('#solves-body').addEventListener('click', e => {
   const tr = e.target.closest('tr');
   if (tr) openSolve(Number(tr.dataset.i));
@@ -441,7 +467,9 @@ function openSolve(i) {
   const s = session().solves[i];
   if (!s) return;
   openSolveIndex = i;
-  $('#solve-title').textContent = `Solve n°${i + 1} · ${Stats.fmtSolve(s, precision())}`;
+  // Numéro dans la liste affichée (solves de la même source).
+  const n = session().solves.slice(0, i + 1).filter(x => solveSource(x) === solveSource(s)).length;
+  $('#solve-title').textContent = `Solve n°${n}${solveSource(s) === 'smart' ? ' (smart)' : ''} · ${Stats.fmtSolve(s, precision())}`;
   $('#solve-date').textContent = new Date(s.d).toLocaleString('fr-FR');
   $('#solve-scramble').textContent = s.s;
   $('#solve-comment').value = s.c || '';

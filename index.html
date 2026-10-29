@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=19">
+<link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
 <div class="app">
@@ -60,6 +60,10 @@
 <main>
   <section id="view-timer" class="view active">
     <aside class="side">
+      <div id="stats-source" class="seg" role="tablist" aria-label="Source des solves">
+        <button type="button" role="tab" data-source="timer">Timer</button>
+        <button type="button" role="tab" data-source="smart">Smart</button>
+      </div>
       <div id="stats" class="card stats"></div>
       <div class="card solves">
         <table>
@@ -328,6 +332,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=20"></script>
+<script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

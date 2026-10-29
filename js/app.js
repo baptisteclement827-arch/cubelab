@@ -4,7 +4,7 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
-import { Timer } from './timer.js';
+import { Timer } from './timer.js?v=12';
 import { picker } from './picker.js?v=10';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState } from './algsets/index.js?v=10';
@@ -137,7 +137,7 @@ function showLastTime() {
 
 /* ---------- Timer ---------- */
 const HINTS = {
-  idle: () => (settings().inspection ? 'Espace (ou appui) pour lancer l\'inspection' : 'Maintiens Espace puis relâche pour démarrer'),
+  idle: () => (settings().inspection ? 'Espace pour lancer l\'inspection' : 'Maintiens Espace puis relâche pour démarrer'),
   inspect: () => 'Maintiens Espace puis relâche pour démarrer · Échap pour annuler',
   hold: () => 'Attends le vert…',
   ready: () => 'Relâche pour démarrer',
@@ -187,7 +187,7 @@ const timer = new Timer({
   },
 });
 
-const typing = e => e.target.closest?.('input, textarea, select, [contenteditable]');
+const typing = e => e.target.closest?.('textarea, input[type="text"], input[type="number"], [contenteditable]');
 // Timer qui reçoit le clavier : celui du Timer ou celui du Trainer, selon l'onglet.
 const activeTimer = () => {
   if (document.querySelector('dialog[open]')) return null;
@@ -196,21 +196,25 @@ const activeTimer = () => {
   return null;
 };
 
-document.addEventListener('keydown', e => {
+// Espace pilote le chrono même si un bouton ou un menu a le focus : écoute en phase de capture,
+// avant l'élément focalisé, qui ne reçoit donc pas la touche.
+const timerKey = (e, handler) => {
   const t = activeTimer();
   if (!t || typing(e)) return;
-  if (t.keyDown(e.code, e.repeat)) e.preventDefault();
-});
-document.addEventListener('keyup', e => {
-  const t = activeTimer();
-  if (!t || typing(e)) return;
-  if (t.keyUp(e.code)) e.preventDefault();
-});
+  if (e.code === 'Space') document.activeElement?.blur?.();
+  if (handler(t)) { e.preventDefault(); e.stopPropagation(); }
+};
+document.addEventListener('keydown', e => timerKey(e, t => t.keyDown(e.code, e.repeat)), true);
+document.addEventListener('keyup', e => timerKey(e, t => t.keyUp(e.code)), true);
 const zone = $('#timer-zone');
-zone.addEventListener('pointerdown', e => { if (e.button === 0) { e.preventDefault(); timer.pointerDown(); } });
-zone.addEventListener('pointerup', e => { if (e.button === 0) timer.pointerUp(); });
+// Au clavier, seule la barre d'espace pilote le chrono (la souris ne fait rien).
+// Sur écran tactile, sans barre d'espace, l'appui sur la zone du chrono la remplace.
+const isTouch = e => e.pointerType === 'touch';
+zone.addEventListener('pointerdown', e => { if (isTouch(e)) { e.preventDefault(); timer.pointerDown(); } });
+zone.addEventListener('pointerup', e => { if (isTouch(e)) timer.pointerUp(); });
 // Arrêt au toucher n'importe où pendant un solve (mobile).
 document.addEventListener('pointerdown', e => {
+  if (!isTouch(e)) return;
   if (timer.state === 'running' && !zone.contains(e.target)) timer.pointerDown();
   if (trainerTimer.state === 'running' && !$('#tr-timer-zone').contains(e.target)) trainerTimer.pointerDown();
 });
@@ -740,7 +744,7 @@ const trainerTimer = new Timer({
     }
     document.body.classList.toggle('solving', v.state === 'running');
     $('#tr-hint').textContent = { hold: 'Attends le vert…', ready: 'Relâche pour démarrer', running: '' }[v.state]
-      ?? 'Fais le mélange, puis maintiens Espace (ou appuie) et relâche pour démarrer';
+      ?? 'Fais le mélange, puis maintiens Espace et relâche pour démarrer';
   },
   onSolve({ ms }) {
     if (!training?.current) return;
@@ -756,8 +760,8 @@ const trainerTimer = new Timer({
 });
 
 const trZone = $('#tr-timer-zone');
-trZone.addEventListener('pointerdown', e => { if (e.button === 0 && training?.current) { e.preventDefault(); trainerTimer.pointerDown(); } });
-trZone.addEventListener('pointerup', e => { if (e.button === 0 && training?.current) trainerTimer.pointerUp(); });
+trZone.addEventListener('pointerdown', e => { if (isTouch(e) && training?.current) { e.preventDefault(); trainerTimer.pointerDown(); } });
+trZone.addEventListener('pointerup', e => { if (isTouch(e) && training?.current) trainerTimer.pointerUp(); });
 
 function pickCase() {
   const { set, cases } = training;
@@ -820,7 +824,7 @@ function renderTrainer() {
   const opt = (list, id) => list.find(x => x.id === id).name.toLowerCase();
   $('#tr-summary').innerHTML = `<strong>${esc(PUZZLES[puzzle].name)} · ${esc(setName)}</strong>
     <span class="muted">${training.cases.length} cas · mélange ${opt(SCRAMBLE_MODES, data.trainer.scramble)} · répartition ${opt(DISTRIBUTIONS, data.trainer.dist)}</span>`;
-  $('#tr-hint').textContent = 'Fais le mélange, puis maintiens Espace (ou appuie) et relâche pour démarrer';
+  $('#tr-hint').textContent = 'Fais le mélange, puis maintiens Espace et relâche pour démarrer';
   renderTrainerStats();
 }
 

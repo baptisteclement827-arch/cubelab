@@ -22,7 +22,11 @@ export class Timer {
 
   // Renvoie true si l'événement a été consommé.
   keyDown(code, repeat) {
-    if (this.state === 'running') { this.stop(); return true; }
+    if (this.state === 'running') {
+      if (code !== 'Space') return false; // seule la barre d'espace arrête le chrono
+      this.stop();
+      return true;
+    }
     if (code === 'Escape') { if (this.busy) { this.cancel(); return true; } return false; }
     if (code !== 'Space') return false;
     if (!repeat) this.press();

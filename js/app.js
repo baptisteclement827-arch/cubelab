@@ -6,7 +6,7 @@ import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
-import { connectMoyu32 } from './devices/moyu32.js?v=19';
+import { connectMoyu32 } from './devices/moyu32.js?v=20';
 import { picker } from './picker.js?v=16';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
@@ -390,9 +390,11 @@ $('#cube-btn').onclick = async () => {
         else if (evt.type === 'move' && smart.state) onSmartMove(evt.move);
       },
       onStatus(status) { if (smart.conn || status === 'connected') setCubeStatus(status); },
-      askMac(name, guess) {
-        return prompt(`Adresse MAC du cube ${name} introuvable automatiquement (ou incorrecte).\n`
-          + 'Elle est visible dans l\'appli MoYu (ex. cf3016017333).', guess ? guess.replace(/:/g, '').toLowerCase() : '');
+      askMac(name, guess, diag) {
+        console.info('[cube MoYu] diagnostic\n' + diag);
+        return prompt(`Le cube ${name} ne répond pas avec la bonne clé.\n`
+          + 'Adresse MAC (visible dans l\'appli MoYu, ex. cf3016017333) :\n\n'
+          + `Diagnostic (version 20) :\n${diag}`, guess ? guess.replace(/:/g, '').toLowerCase() : '');
       },
       // L'adresse validée est retenue : plus besoin de la saisir.
       knownMac: name => data.devices?.[name] || null,

@@ -54,6 +54,16 @@ export function makeCodec(mac) {
   };
 }
 
+// Résumé lisible du diagnostic (affiché quand la connexion échoue).
+function diagText(device, diag) {
+  const lines = [`Nom : ${device.name || '(aucun)'} · advertisements : ${device.watchAdvertisements ? 'oui' : 'non'}`];
+  for (const a of diag.attempts) {
+    const frames = a.frames.map(f => `${f.len}o type ${f.type} [${f.raw}]`).join(', ');
+    lines.push(`${a.mac} → ${a.frames.length ? frames : 'aucun message'}${a.error ? ` · erreur d'envoi : ${a.error}` : ''}`);
+  }
+  return lines.join('\n');
+}
+
 const bits = (bytes, start, len) => {
   let v = 0;
   for (let i = start; i < start + len; i++) v = v * 2 + ((bytes[i >> 3] >> (7 - (i & 7))) & 1);
@@ -158,6 +168,9 @@ export async function connectMoyu32({ onEvent, onStatus, askMac, knownMac = () =
   let closed = false;
   let lastCount = -1;
   let verified = false;
+  // Diagnostic : pour chaque adresse essayée, les messages reçus (premier octet déchiffré, et brut).
+  const diag = { attempts: [] };
+  let attempt = null;
 
   const send = opcode => {
     const req = new Array(20).fill(0);
@@ -168,7 +181,12 @@ export async function connectMoyu32({ onEvent, onStatus, askMac, knownMac = () =
   const onValue = e => {
     if (!codec) return;
     const v = e.target.value;
-    const msg = parseMessage(codec.decode(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)));
+    const raw = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+    const decoded = codec.decode(raw);
+    if (attempt && attempt.frames.length < 6) {
+      attempt.frames.push({ len: raw.length, type: decoded[0], raw: Array.from(raw.slice(0, 6), b => b.toString(16).padStart(2, '0')).join('') });
+    }
+    const msg = parseMessage(decoded);
     if (!msg) return;
     // Tant que la clé n'est pas confirmée, seule une réponse cohérente compte (une mauvaise clé donne du bruit).
     if (!verified) {
@@ -201,10 +219,16 @@ export async function connectMoyu32({ onEvent, onStatus, askMac, knownMac = () =
     verified = false;
     lastCount = -1;
     codec = makeCodec(mac);
-    await send(MSG.INFO);
-    await send(MSG.STATE);
-    await send(MSG.BATTERY);
-    await new Promise(r => setTimeout(r, 1500));
+    attempt = { mac, frames: [], error: null };
+    diag.attempts.push(attempt);
+    try {
+      await send(MSG.INFO);
+      await send(MSG.STATE);
+      await send(MSG.BATTERY);
+    } catch (err) {
+      attempt.error = err.message;
+    }
+    await new Promise(r => setTimeout(r, 2000));
     return verified;
   }
 
@@ -231,7 +255,7 @@ export async function connectMoyu32({ onEvent, onStatus, askMac, knownMac = () =
   for (const m of candidates) if ((ok = await tryMac(m))) break;
   if (!ok) ok = await tryMac(await macFromAdvertisement(device));
   while (!ok) {
-    const answer = await askMac(device.name, [...tried].at(-1));
+    const answer = await askMac(device.name, [...tried].at(-1), diagText(device, diag));
     if (!answer) { closed = true; device.gatt.disconnect(); throw new Error('Adresse MAC du cube inconnue'); }
     if (!normalizeMac(answer)) continue;
     tried.delete(normalizeMac(answer)); // une saisie explicite est toujours réessayée

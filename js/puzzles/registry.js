@@ -6,7 +6,7 @@ import { solver } from '../solver/client.js';
 export const PUZZLES = {
   '333': {
     id: '333', name: '3x3', n: 3, available: true,
-    algSets: [{ id: 'oll', name: 'OLL' }],
+    algSets: [{ id: 'oll', name: 'OLL' }, { id: 'pll', name: 'PLL' }],
     async scramble({ type = 'random-state' } = {}) {
       if (type === 'random-move') return randomMoveScramble({ length: 25 });
       try {

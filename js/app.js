@@ -1,12 +1,12 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
-import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=5';
-import * as Store from './storage.js?v=5';
+import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
+import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js';
 import { Timer } from './timer.js';
-import { renderNet, renderLL } from './render2d.js?v=5';
-import { ALG_SETS, caseState as algCaseState, solvesCase } from './algsets/index.js?v=5';
+import { renderNet, renderLL } from './render2d.js?v=7';
+import { ALG_SETS, caseState as algCaseState, solvesCase } from './algsets/index.js?v=6';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -392,10 +392,10 @@ function renderAlgos() {
   renderAlgoList();
 }
 
-// Les schémas sont calculés une seule fois (57 cas OLL).
+// Les schémas sont calculés une seule fois par cas.
 const caseImages = new Map();
 const caseImage = c => {
-  if (!caseImages.has(c.id)) caseImages.set(c.id, renderLL(algCaseState(c.alg)));
+  if (!caseImages.has(c.id)) caseImages.set(c.id, renderLL(algCaseState(c.alg), currentSet().view));
   return caseImages.get(c.id);
 };
 

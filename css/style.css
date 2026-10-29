@@ -237,6 +237,9 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case.learning .case-name::before { background: var(--inspect); }
 .case.learned .case-name::before { background: var(--ready); }
 
+.ll-arrows line { stroke: #16181d; stroke-width: 0.09; stroke-linecap: round; }
+.ll-arrows polygon { fill: #16181d; }
+
 .case-panel {
   grid-column: 1 / -1; display: flex; gap: 16px; padding: 14px; border-radius: 10px;
   border: 2px solid var(--accent); background: var(--surface); scroll-margin: 16px;

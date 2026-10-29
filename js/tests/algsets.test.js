@@ -1,7 +1,7 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
-import { parseAlg } from '../core/notation.js';
-import { ALG_SETS, caseState, solvesCase } from '../algsets/index.js';
+import { parseAlg, mirrorMoves, formatAlg } from '../core/notation.js';
+import { ALG_SETS, caseState, solvesCase, relabel } from '../algsets/index.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -81,6 +81,67 @@ test('OLL : vérification de l\'algo de l\'utilisateur', () => {
   let threw = false;
   try { solvesCase(oll, sune, 'R U ('); } catch { threw = true; }
   ok(threw, 'Une erreur de syntaxe doit être signalée');
+});
+
+// ---------- PLL ----------
+const pll = ALG_SETS['333/pll'];
+const pllStates = pll.CASES.map(c => caseState(c.alg));
+const Y = parseAlg('y');
+// Signature d'un cas PLL, indépendante de l'angle de vue (y) et de l'AUF.
+const pllKey = s => {
+  const keys = [];
+  for (let v = 0; v < 4; v++) {
+    let t = s;
+    for (let a = 0; a < 4; a++) { keys.push(Array.from(t).join('')); t = c3.apply(t, U); }
+    s = relabel(c3.apply(s, Y));
+  }
+  return keys.sort()[0];
+};
+// Vrai si, à un AUF près, toutes les facettes latérales listées sont à leur place.
+const inPlaceUpToAuf = (s, idx) => {
+  for (let a = 0; a < 4; a++, s = c3.apply(s, U)) if (idx.every(i => s[i] === Math.floor(i / 9))) return true;
+  return false;
+};
+const SIDE_EDGES = [10, 19, 37, 46];
+const SIDE_CORNERS = [9, 11, 18, 20, 36, 38, 45, 47];
+
+test('PLL : 21 cas, F2L gardée et dernière couche orientée', () => {
+  ok(pll.CASES.length === 21, `${pll.CASES.length} cas`);
+  pll.CASES.forEach((c, i) => {
+    ok(f2lSolved(pllStates[i]), `${c.name} casse la F2L`);
+    ok(TOP.every(j => pllStates[i][j] === 0), `${c.name} : dernière couche non orientée`);
+  });
+});
+test('PLL : chaque algo résout son cas (sans AUF final)', () => {
+  pll.CASES.forEach((c, i) => ok(c3.isSolved(relabel(c3.apply(pllStates[i], parseAlg(c.alg)))), `${c.name} ne résout pas`));
+});
+test('PLL : 21 cas distincts', () => {
+  const seen = new Map();
+  pll.CASES.forEach((c, i) => {
+    const k = pllKey(pllStates[i]);
+    ok(!seen.has(k), `${c.name} et ${seen.get(k)} sont le même cas`);
+    seen.set(k, c.name);
+  });
+});
+test('PLL : sous-ensembles Edges Only et Corners Only cohérents', () => {
+  pll.CASES.forEach((c, i) => {
+    if (c.subset === 'edges') ok(inPlaceUpToAuf(pllStates[i], SIDE_CORNERS), `${c.name} : coins pas en place`);
+    if (c.subset === 'corners') ok(inPlaceUpToAuf(pllStates[i], SIDE_EDGES), `${c.name} : arêtes pas en place`);
+  });
+});
+test('PLL : paires miroir (Ua/Ub, Aa/Ab, Ja/Jb, Ra/Rb, Na/Nb)', () => {
+  const byName = n => pll.CASES.find(c => c.id === `pll${n}`);
+  for (const [a, b] of [['Ua', 'Ub'], ['Aa', 'Ab'], ['Ja', 'Jb'], ['Ra', 'Rb'], ['Na', 'Nb']]) {
+    const mirrored = formatAlg(mirrorMoves(parseAlg(byName(a).alg)));
+    ok(solvesCase(pll, byName(b), mirrored) !== null, `le miroir de ${a} ne résout pas ${b}`);
+  }
+});
+test('PLL : algos alternatifs reconnus (M2 U M U2 M\' U M2 = Ua, V avec rotation y)', () => {
+  const byName = n => pll.CASES.find(c => c.id === `pll${n}`);
+  ok(solvesCase(pll, byName('Ua'), "M2 U M U2 M' U M2") !== null, 'Ua (M) refusé');
+  ok(solvesCase(pll, byName('Ub'), "M2 U' M U2 M' U' M2") !== null, 'Ub (M) refusé');
+  ok(solvesCase(pll, byName('Ua'), "M2 U' M U2 M' U' M2") === null, 'Ub accepté pour Ua');
+  ok(solvesCase(pll, byName('V'), byName('V').alg) === '', 'V refusé');
 });
 
 export default results;

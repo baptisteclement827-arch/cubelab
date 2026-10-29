@@ -28,12 +28,60 @@ export function renderNet(state, n) {
 }
 
 // Vue de dessus de la dernière couche (face U + bande du haut des 4 faces latérales), arrière en haut.
-// Mode « oll » : seules les facettes de la couleur du haut sont colorées (en jaune, convention des fiches OLL).
+// view « oll » : seules les facettes de la couleur du haut sont colorées (en jaune, convention des fiches).
+// view « pll » : couleurs complètes (jaune dessus, vert devant) + flèches des pièces à déplacer.
 const TOP = '#ffd500';
 const OFF = '#3a3f4a';
+// Couleur affichée par face d'origine, jaune en haut : U jaune, R orange, F vert, L rouge, B bleu.
+const PLL_COLORS = [TOP, '#ff7f0e', '#14a44d', OFF, '#d7191c', '#1f5fd6'];
 
-export function renderLL(state) {
-  const color = i => (state[i] === 0 ? TOP : OFF);
+// Pièces de la dernière couche : facette U (index 0-8) + facettes latérales qui l'identifient.
+const LL_PIECES = [
+  { u: 1, side: [46] }, { u: 3, side: [37] }, { u: 5, side: [10] }, { u: 7, side: [19] },
+  { u: 0, side: [47, 36] }, { u: 2, side: [11, 45] }, { u: 6, side: [38, 18] }, { u: 8, side: [20, 9] },
+];
+const pieceKey = (state, p) => p.side.map(i => state[i]).sort().join();
+const homeKey = p => p.side.map(i => Math.floor(i / 9)).sort().join();
+
+// Flèches : de la position actuelle de chaque pièce vers sa place (les échanges ont une double pointe).
+// Si l'algo finit par un AUF, on prend l'AUF final qui déplace le moins de pièces.
+const TURN = [2, 5, 8, 1, 4, 7, 0, 3, 6]; // quart de tour de la face U, en vue de dessus
+
+function arrows(state) {
+  let target = null;
+  for (let k = 0, rot = i => i; k < 4; k++, rot = (r => i => TURN[r(i)])(rot)) {
+    const homes = new Map(LL_PIECES.map(p => [homeKey(p), rot(p.u)]));
+    const t = new Map();
+    for (const p of LL_PIECES) {
+      const to = homes.get(pieceKey(state, p));
+      if (to !== undefined && to !== p.u) t.set(p.u, to);
+    }
+    if (!target || t.size < target.size) target = t;
+  }
+  const center = i => [(i % 3) + 0.5, Math.floor(i / 3) + 0.5];
+  let out = '';
+  const done = new Set();
+  for (const [from, to] of target) {
+    if (done.has(from)) continue;
+    const swap = target.get(to) === from;
+    if (swap) done.add(to);
+    const [x1, y1] = center(from), [x2, y2] = center(to);
+    const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    const cut = 0.22;
+    const a = [x1 + ux * cut, y1 + uy * cut], b = [x2 - ux * cut, y2 - uy * cut];
+    const head = ([x, y], dx, dy) => {
+      const h = 0.26, w = 0.14;
+      return `<polygon points="${x},${y} ${x - dx * h - dy * w},${y - dy * h + dx * w} ${x - dx * h + dy * w},${y - dy * h - dx * w}"/>`;
+    };
+    const shaft = (p, dx, dy, inset) => [p[0] - dx * inset, p[1] - dy * inset];
+    const s1 = swap ? shaft(a, -ux, -uy, 0.2) : a, s2 = shaft(b, ux, uy, 0.2);
+    out += `<line x1="${s1[0]}" y1="${s1[1]}" x2="${s2[0]}" y2="${s2[1]}"/>` + head(b, ux, uy) + (swap ? head(a, -ux, -uy) : '');
+  }
+  return out ? `<g class="ll-arrows">${out}</g>` : '';
+}
+
+export function renderLL(state, view = 'oll') {
+  const color = view === 'pll' ? i => PLL_COLORS[state[i]] ?? OFF : i => (state[i] === 0 ? TOP : OFF);
   const cell = (x, y, w, h, i) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="0.1" fill="${color(i)}"/>`;
   const s = 0.94; // taille d'une facette du dessus (pas de 1)
   const t = 0.3;  // épaisseur des bandes latérales
@@ -45,6 +93,7 @@ export function renderLL(state) {
     out += cell(2 - k + 0.03, -0.08 - t, s, t, 45 + k); // B : de droite à gauche
     out += cell(-0.08 - t, k + 0.03, t, s, 36 + k);  // L : de l'arrière vers l'avant
   }
+  if (view === 'pll') out += arrows(state);
   const m = t + 0.12;
   return `<svg class="ll" viewBox="${-m} ${-m} ${3 + 2 * m} ${3 + 2 * m}" role="img" aria-label="Vue de dessus de la dernière couche">${out}</svg>`;
 }

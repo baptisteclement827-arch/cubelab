@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 <div class="app">
@@ -179,12 +179,12 @@
     <div class="algos">
       <div class="card algos-head">
         <div class="algos-pick">
-          <span class="algos-label">Cube</span>
-          <div id="algos-puzzle" class="chips" role="radiogroup" aria-label="Cube"></div>
+          <label class="algos-label" for="algos-puzzle">Cube</label>
+          <select id="algos-puzzle"></select>
         </div>
         <div class="algos-pick">
-          <span class="algos-label">Ensemble</span>
-          <div id="algos-set" class="chips" role="radiogroup" aria-label="Ensemble d'algos"></div>
+          <label class="algos-label" for="algos-set">Ensemble</label>
+          <select id="algos-set"></select>
         </div>
       </div>
       <div id="algos-list" class="algos-list"></div>
@@ -267,6 +267,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=7"></script>
+<script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

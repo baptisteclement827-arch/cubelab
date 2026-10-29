@@ -380,15 +380,15 @@ function showTab(name) {
 let algosPuzzle = DEFAULT_PUZZLE;
 let algosSet = PUZZLES[DEFAULT_PUZZLE].algSets?.[0]?.id;
 
-const radioChips = (name, items, current) => items
-  .map(it => `<label class="chip"><input type="radio" name="${name}" value="${it.id}" ${it.id === current ? 'checked' : ''}><span>${esc(it.name)}</span></label>`)
+const options = (items, current) => items
+  .map(it => `<option value="${it.id}" ${it.id === current ? 'selected' : ''}>${esc(it.name)}</option>`)
   .join('');
 
 function renderAlgos() {
   const sets = PUZZLES[algosPuzzle].algSets || [];
   if (!sets.some(s => s.id === algosSet)) algosSet = sets[0]?.id;
-  $('#algos-puzzle').innerHTML = radioChips('algos-puzzle', Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
-  $('#algos-set').innerHTML = radioChips('algos-set', sets, algosSet);
+  $('#algos-puzzle').innerHTML = options(Object.values(PUZZLES).filter(p => p.available), algosPuzzle);
+  $('#algos-set').innerHTML = options(sets, algosSet);
   renderAlgoList();
 }
 
@@ -420,6 +420,9 @@ function setProgress(id, patch) {
 }
 
 let openCaseId = null;
+// Un algo enregistré est verrouillé ; maintenir 2 s dessus le rend modifiable.
+let editingCaseId = null;
+const UNLOCK_MS = 2000;
 
 function caseButton(c) {
   const st = statusOf(c);
@@ -452,6 +455,7 @@ function placeCasePanel(scroll) {
   const btn = c && document.querySelector(`.case[data-case="${c.id}"]`);
   document.querySelector('.case-panel')?.remove();
   if (!btn) { openCaseId = null; return; }
+  if (editingCaseId !== c.id) editingCaseId = null;
   const row = [...btn.parentElement.children].filter(el => el.classList.contains('case') && el.offsetTop === btn.offsetTop);
   const panel = document.createElement('div');
   panel.className = 'case-panel';
@@ -462,9 +466,14 @@ function placeCasePanel(scroll) {
         <h3>${esc(c.name)}</h3>
         <button type="button" class="btn ghost" data-close-case>Fermer</button>
       </div>
-      <label class="stack">Mon algo
-        <textarea class="case-alg" rows="2" spellcheck="false" placeholder="${esc(c.alg)}">${esc(progress(c.id).alg || '')}</textarea>
-      </label>
+      <div class="stack">
+        <label for="case-alg-${c.id}">Mon algo</label>
+        <textarea id="case-alg-${c.id}" class="case-alg" rows="2" spellcheck="false" placeholder="${esc(c.alg)}">${esc(progress(c.id).alg || '')}</textarea>
+        <div class="case-alg-locked" tabindex="0" role="button" aria-label="Algo verrouillé : maintenir 2 secondes pour modifier" hidden>
+          <span class="case-alg-text"></span>
+          <span class="case-alg-hint">Maintiens 2 s pour modifier</span>
+        </div>
+      </div>
       <p class="case-check muted"></p>
       <div class="status-pick" role="radiogroup" aria-label="État">
         ${STATUSES.map(s => `<label class="chip status-${s.id}"><input type="radio" name="case-status" value="${s.id}" ${s.id === statusOf(c) ? 'checked' : ''}><span>${s.name}</span></label>`).join('')}
@@ -472,6 +481,7 @@ function placeCasePanel(scroll) {
     </div>`;
   row.at(-1).after(panel);
   checkCaseAlg(panel, set, c);
+  updateLock(panel, c);
   if (scroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -481,7 +491,7 @@ function checkCaseAlg(panel, set, c) {
   const alg = input.value.trim();
   out.className = 'case-check';
   if (!alg) {
-    out.innerHTML = `Algo par défaut : <code>${esc(c.alg)}</code>`;
+    out.innerHTML = `Algo par défaut (Tab pour le mettre) : <code>${esc(c.alg)}</code>`;
     out.classList.add('muted');
     return;
   }
@@ -493,6 +503,43 @@ function checkCaseAlg(panel, set, c) {
     out.textContent = e.message;
     out.classList.add('error');
   }
+}
+
+function updateLock(panel, c) {
+  const saved = progress(c.id).alg || '';
+  const locked = !!saved && editingCaseId !== c.id;
+  const box = panel.querySelector('.case-alg-locked');
+  box.hidden = !locked;
+  panel.querySelector('.case-alg').hidden = locked;
+  box.querySelector('.case-alg-text').textContent = saved;
+}
+
+// Fige l'algo s'il est valide et enregistré (sortie du champ, Tab, Entrée).
+function commitCaseAlg(panel, c) {
+  const input = panel.querySelector('.case-alg');
+  if (input.value.trim() && input.value.trim() === progress(c.id).alg) editingCaseId = null;
+  updateLock(panel, c);
+}
+
+let unlockTimer = null;
+function startUnlock(box) {
+  cancelUnlock();
+  box.classList.add('pressing');
+  unlockTimer = setTimeout(() => {
+    box.classList.remove('pressing');
+    const panel = box.closest('.case-panel');
+    const c = currentSet().CASES.find(x => x.id === openCaseId);
+    editingCaseId = c.id;
+    updateLock(panel, c);
+    const input = panel.querySelector('.case-alg');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, UNLOCK_MS);
+}
+function cancelUnlock() {
+  clearTimeout(unlockTimer);
+  unlockTimer = null;
+  document.querySelector('.case-alg-locked.pressing')?.classList.remove('pressing');
 }
 
 function openCase(id) {
@@ -523,11 +570,49 @@ $('#algos-list').addEventListener('input', e => {
   checkCaseAlg(panel, set, c);
   // On n'enregistre que les algos valides (ou vide = algo par défaut).
   const alg = e.target.value.trim();
+  editingCaseId = c.id;
   if (!panel.querySelector('.case-check').classList.contains('error')) {
     setProgress(c.id, { alg });
     refreshCaseButton(c);
   }
 });
+$('#algos-list').addEventListener('keydown', e => {
+  if (e.target.matches('.case-alg')) {
+    const panel = e.target.closest('.case-panel');
+    const c = currentSet().CASES.find(x => x.id === openCaseId);
+    if (e.key === 'Tab' && !e.shiftKey) {
+      // Tab : met l'algo par défaut et le verrouille.
+      e.preventDefault();
+      e.target.value = c.alg;
+      setProgress(c.id, { alg: c.alg });
+      refreshCaseButton(c);
+      checkCaseAlg(panel, currentSet(), c);
+      editingCaseId = null;
+      updateLock(panel, c);
+      panel.querySelector('.case-alg-locked').focus();
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.target.blur();
+    }
+  } else if (e.target.matches('.case-alg-locked') && (e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+    e.preventDefault();
+    startUnlock(e.target);
+  }
+});
+$('#algos-list').addEventListener('keyup', e => { if (e.target.matches('.case-alg-locked')) cancelUnlock(); });
+$('#algos-list').addEventListener('focusout', e => {
+  if (!e.target.matches('.case-alg')) return;
+  const c = currentSet()?.CASES.find(x => x.id === openCaseId);
+  if (c) commitCaseAlg(e.target.closest('.case-panel'), c);
+});
+$('#algos-list').addEventListener('pointerdown', e => {
+  const box = e.target.closest('.case-alg-locked');
+  if (box && e.button === 0) startUnlock(box);
+});
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+  $('#algos-list').addEventListener(ev, e => { if (unlockTimer && (ev !== 'pointerleave' || e.target.closest('.case-alg-locked'))) cancelUnlock(); }, true);
+}
+$('#algos-list').addEventListener('contextmenu', e => { if (e.target.closest('.case-alg-locked')) e.preventDefault(); });
 $('#algos-list').addEventListener('change', e => {
   if (e.target.name !== 'case-status') return;
   const c = currentSet().CASES.find(x => x.id === openCaseId);

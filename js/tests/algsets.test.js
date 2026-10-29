@@ -1,7 +1,7 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
 import { parseAlg, mirrorMoves, formatAlg } from '../core/notation.js';
-import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState } from '../algsets/index.js';
+import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState, reverseSetup, stateAfter } from '../algsets/index.js';
 import { timeStats } from '../stats.js';
 
 const results = [];
@@ -169,6 +169,20 @@ test('État aléatoire d\'un cas : F2L intacte et l\'algo résout le cas (AUF co
         else for (let b = 0; b < 4 && !solved; b++, t = c3.apply(t, U)) solved = c3.isSolved(t);
       }
       ok(solved, `${c.name} : l'état aléatoire n'est pas ce cas`);
+    }
+  }
+});
+test('Sans AUF : le cas est exactement sous l\'angle de l\'algo', () => {
+  let seed = 11;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const set of [oll, pll]) {
+    for (const c of set.CASES) {
+      for (const s of [randomCaseState(set, c, rand, { auf: false }), stateAfter(reverseSetup(c.alg, rand, { auf: false }))]) {
+        const t = relabel(c3.apply(s, parseAlg(c.alg)));
+        ok(set === oll ? TOP.every(j => t[j] === 0) && f2lSolved(t) : c3.isSolved(t), `${c.name} : AUF nécessaire`);
+      }
+      // Avec AUF, le setup reverse reste ce cas.
+      ok(solvesCase(set, c, c.alg) !== null && f2lSolved(stateAfter(reverseSetup(c.alg, rand))), `${c.name} : reverse avec AUF`);
     }
   }
 });

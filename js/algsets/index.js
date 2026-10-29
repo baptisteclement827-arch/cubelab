@@ -87,16 +87,28 @@ export function pickWeighted(items, weightOf, rand = Math.random) {
 
 const randomAuf = (rand = Math.random) => parseAlg(AUFS[Math.floor(rand() * 4)]);
 
-// État aléatoire où le cas se présente (AUF aléatoire ; pour l'OLL, permutation aléatoire de la dernière couche).
-export function randomCaseState(set, c, rand = Math.random) {
+// État aléatoire où le cas se présente. auf : AUF aléatoire avant (et après pour la PLL) ;
+// sans AUF, le cas est exactement sous l'angle de l'algo. Pour l'OLL, la permutation est toujours aléatoire.
+export function randomCaseState(set, c, rand = Math.random, { auf = true } = {}) {
   let s = cube3.solved();
   if (set.view === 'oll') {
     const pll = ALG_SETS['333/pll'];
     const w = caseWeights(pll);
     const p = pickWeighted([...pll.CASES, null], x => (x ? w.get(x.id) : 4), rand); // null = PLL skip
     if (p) s = relabel(cube3.apply(s, invertMoves(parseAlg(p.alg))));
+    s = cube3.apply(s, randomAuf(rand));
+  } else if (auf) {
+    s = cube3.apply(s, randomAuf(rand));
   }
-  s = cube3.apply(s, randomAuf(rand));
   s = relabel(cube3.apply(s, invertMoves(parseAlg(c.alg))));
-  return cube3.apply(s, randomAuf(rand));
+  return auf ? cube3.apply(s, randomAuf(rand)) : s;
 }
+
+// Setup « reverse » : l'inverse de l'algo, encadré d'AUF aléatoires si demandé.
+export function reverseSetup(alg, rand = Math.random, { auf = true } = {}) {
+  const inv = invertMoves(parseAlg(alg));
+  return auf ? [...randomAuf(rand), ...inv, ...randomAuf(rand)] : inv;
+}
+
+// État du cube après un setup (couleurs renommées d'après les centres).
+export const stateAfter = moves => relabel(cube3.apply(cube3.solved(), moves));

@@ -266,7 +266,8 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case-alg { font-family: var(--mono); font-size: 16px; font-weight: 400; resize: vertical; width: 100%; }
 .case-check { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .case-times { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
-.case-times p { margin: 0; flex: 1; min-width: 200px; }
+.case-times > div { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+.case-times p { margin: 0; }
 .case-times .btn { font-size: 13px; padding: 3px 10px; }
 .case-check code { font-family: var(--mono); color: var(--text); }
 .case-check.ok { color: var(--ready); font-weight: 600; }
@@ -341,6 +342,10 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .tr-last-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tr-last-body code { font-family: var(--mono); font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 body.solving .tr-last, body.solving #tr-skip { visibility: hidden; }
+.tr-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tr-preview[hidden] { display: none; }
+.tr-preview .ll { width: 120px; height: auto; display: block; }
+.tr-preview strong { font-size: 15px; }
 
 /* ---------- Dialogues ---------- */
 dialog {

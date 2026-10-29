@@ -7,7 +7,7 @@ import * as Stats from './stats.js?v=10';
 import { Timer } from './timer.js?v=12';
 import { picker } from './picker.js?v=10';
 import { renderNet, renderLL } from './render2d.js?v=7';
-import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState } from './algsets/index.js?v=10';
+import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -499,8 +499,8 @@ function placeCasePanel(scroll) {
       </div>
       <p class="case-check muted"></p>
       <div class="case-times">
-        <p class="muted">${caseTimesText(progress(c.id).times)}</p>
-        ${progress(c.id).times?.length ? '<button type="button" class="btn ghost danger" data-clear-times>Supprimer les stats</button>' : ''}
+        <div class="muted">${caseTimesText('Sans check', progress(c.id).times)}${caseTimesText('Avec check', progress(c.id).timesCheck)}</div>
+        ${timesCount(c.id) ? '<button type="button" class="btn ghost danger" data-clear-times>Supprimer les stats</button>' : ''}
       </div>
       <div class="status-pick" role="radiogroup" aria-label="État">
         ${STATUSES.map(s => `<label class="chip status-${s.id}"><input type="radio" name="case-status" value="${s.id}" ${s.id === statusOf(c) ? 'checked' : ''}><span>${s.name}</span></label>`).join('')}
@@ -532,12 +532,14 @@ function checkCaseAlg(panel, set, c) {
   }
 }
 
-function caseTimesText(times) {
+const timesCount = id => (progress(id).times?.length || 0) + (progress(id).timesCheck?.length || 0);
+
+function caseTimesText(label, times) {
   const st = Stats.timeStats(times);
-  if (!st) return 'Pas encore de temps d\'entraînement.';
+  if (!st) return `<p>${label} : pas encore de temps.</p>`;
   const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
   const f1 = ms => Stats.fmt(ms, { precision: precision() });
-  return `Entraînement (${st.count}) : moyenne ${f(st.mean)} · médiane ${f(st.median)} · meilleur ${f1(st.best)} · pire ${f1(st.worst)}`;
+  return `<p>${label} (${st.count}) : moyenne ${f(st.mean)} · médiane ${f(st.median)} · meilleur ${f1(st.best)} · pire ${f1(st.worst)}</p>`;
 }
 
 function updateLock(panel, c) {
@@ -601,8 +603,8 @@ $('#algos-list').addEventListener('click', e => {
   else if (e.target.closest('[data-close-case]')) openCase(openCaseId);
   else if (e.target.closest('[data-clear-times]')) {
     const c = currentSet().CASES.find(x => x.id === openCaseId);
-    if (!confirm(`Supprimer les ${progress(c.id).times.length} temps d'entraînement de ${c.name} ?`)) return;
-    setProgress(c.id, { times: null });
+    if (!confirm(`Supprimer les ${timesCount(c.id)} temps d'entraînement de ${c.name} ?`)) return;
+    setProgress(c.id, { times: null, timesCheck: null });
     placeCasePanel(false);
   }
 });
@@ -676,9 +678,20 @@ let selecting = false;
 const selection = new Set();
 const SCRAMBLE_MODES = [{ id: 'inverse', name: 'Reverse' }, { id: 'random', name: 'Aléatoire' }];
 const DISTRIBUTIONS = [{ id: 'balanced', name: 'Équilibrée' }, { id: 'realistic', name: 'Réaliste' }];
-const trainOpts = { scramble: data.trainer?.scramble || 'inverse', dist: data.trainer?.dist || 'balanced' };
+const CHECK_MODES = [{ id: 'off', name: 'Sans' }, { id: 'on', name: 'Avec' }];
+const AUF_MODES = [{ id: 'on', name: 'Avec' }, { id: 'off', name: 'Sans' }];
+const trainOpts = {
+  scramble: data.trainer?.scramble || 'inverse',
+  dist: data.trainer?.dist || 'balanced',
+  check: data.trainer?.check || 'off',
+  auf: data.trainer?.auf || 'on',
+};
+// Les temps avec check visuel (cas montré avant l'essai) sont rangés à part.
+const timesField = check => (check === 'on' ? 'timesCheck' : 'times');
 const scramblePicker = picker($('#train-scramble'), { label: 'Mélange', onChange(id) { trainOpts.scramble = id; } });
 const distPicker = picker($('#train-dist'), { label: 'Répartition', onChange(id) { trainOpts.dist = id; } });
+const checkPicker = picker($('#train-check'), { label: 'Check visuel', onChange(id) { trainOpts.check = id; } });
+const aufPicker = picker($('#train-auf'), { label: 'AUF', onChange(id) { trainOpts.auf = id; } });
 
 function renderTrainBar() {
   $('#view-algos').classList.toggle('selecting', selecting);
@@ -696,6 +709,8 @@ function renderTrainBar() {
   }).join('');
   scramblePicker.set(SCRAMBLE_MODES, trainOpts.scramble);
   distPicker.set(DISTRIBUTIONS, trainOpts.dist);
+  checkPicker.set(CHECK_MODES, trainOpts.check);
+  aufPicker.set(AUF_MODES, trainOpts.auf);
   $('#train-start').disabled = !n;
   $('#train-start').textContent = n ? `Lancer (${n})` : 'Lancer';
 }
@@ -729,7 +744,7 @@ $('#train-status').addEventListener('click', e => {
 });
 $('#train-start').onclick = () => {
   if (!selection.size) return;
-  data.trainer = { set: setKey(), ids: [...selection], scramble: trainOpts.scramble, dist: trainOpts.dist, active: true };
+  data.trainer = { set: setKey(), ids: [...selection], ...trainOpts, active: true };
   persist();
   setSelecting(false);
   training = null;
@@ -757,9 +772,10 @@ const trainerTimer = new Timer({
   onSolve({ ms }) {
     if (!training?.current) return;
     const { c } = training.current;
-    const times = [...(progressIn(training.key, c.id).times || []), ms];
-    setProgressIn(training.key, c.id, { times });
-    trHistory.push({ key: training.key, id: c.id, ms });
+    const field = timesField(data.trainer.check);
+    const times = [...(progressIn(training.key, c.id)[field] || []), ms];
+    setProgressIn(training.key, c.id, { [field]: times });
+    trHistory.push({ key: training.key, id: c.id, ms, field });
     $('#tr-timer').textContent = Stats.fmt(ms, { precision: precision() });
     showLastAttempt();
     renderTrainerStats();
@@ -782,18 +798,26 @@ function pickCase() {
 async function prepareAttempt() {
   const { set, key } = training;
   const c = pickCase();
+  const auf = data.trainer.auf !== 'off';
   if (data.trainer.scramble === 'inverse') {
-    const alg = progressIn(key, c.id).alg || c.alg;
-    return { c, scramble: formatAlg(simplify(invertMoves(parseAlg(alg)))) };
+    const setup = reverseSetup(progressIn(key, c.id).alg || c.alg, Math.random, { auf });
+    return { c, state: stateAfter(setup), scramble: formatAlg(simplify(setup)) };
   }
-  const sol = await solver.solve(randomCaseState(set, c));
-  return { c, scramble: formatAlg(invertMoves(parseAlg(sol))) };
+  const state = randomCaseState(set, c, Math.random, { auf });
+  const sol = await solver.solve(state);
+  return { c, state, scramble: formatAlg(invertMoves(parseAlg(sol))) };
 }
 
 // Essais déjà affichés : ← revient en arrière, → avance (ou tire un nouveau cas au bout de la liste).
 function showAttempt(attempt) {
   training.current = attempt;
   $('#tr-scramble').textContent = attempt.scramble;
+  // Check visuel : le cas est montré avant l'essai, tel qu'il se présente (AUF compris).
+  const show = data.trainer.check === 'on';
+  $('#tr-preview').hidden = !show;
+  if (show) {
+    $('#tr-preview').innerHTML = `${renderLL(attempt.state, training.set.view)}<strong>${esc(attempt.c.name)}</strong>`;
+  }
 }
 
 function prevAttempt() {
@@ -837,6 +861,7 @@ function startTraining() {
   training = { key: cfg.set, set, cases, current: null, next: null, shown: [], pos: -1, loading: false };
   $('#tr-timer').textContent = Stats.fmt(0, { precision: precision() });
   $('#tr-last').hidden = true;
+  $('#tr-preview').hidden = true;
   nextAttempt();
 }
 
@@ -849,7 +874,8 @@ function renderTrainer() {
   const setName = PUZZLES[puzzle].algSets.find(x => x.id === setId)?.name;
   const opt = (list, id) => list.find(x => x.id === id).name.toLowerCase();
   $('#tr-summary').innerHTML = `<strong>${esc(PUZZLES[puzzle].name)} · ${esc(setName)}</strong>
-    <span class="muted">${training.cases.length} cas · mélange ${opt(SCRAMBLE_MODES, data.trainer.scramble)} · répartition ${opt(DISTRIBUTIONS, data.trainer.dist)}</span>`;
+    <span class="muted">${training.cases.length} cas · mélange ${opt(SCRAMBLE_MODES, data.trainer.scramble)} · répartition ${opt(DISTRIBUTIONS, data.trainer.dist)}
+      · ${opt(CHECK_MODES, data.trainer.check || 'off')} check visuel · ${opt(AUF_MODES, data.trainer.auf || 'on')} AUF</span>`;
   $('#tr-hint').textContent = 'Fais le mélange, puis maintiens Espace et relâche pour démarrer';
   renderTrainerStats();
 }
@@ -857,7 +883,8 @@ function renderTrainer() {
 function renderTrainerStats() {
   const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
   const f1 = ms => Stats.fmt(ms, { precision: precision() });
-  const rows = training.cases.map(c => ({ c, st: Stats.timeStats(progressIn(training.key, c.id).times) }));
+  const field = timesField(data.trainer.check);
+  const rows = training.cases.map(c => ({ c, st: Stats.timeStats(progressIn(training.key, c.id)[field]) }));
   // Les plus lents en premier : ce sont eux à travailler.
   rows.sort((a, b) => (b.st?.mean ?? -1) - (a.st?.mean ?? -1));
   $('#tr-stats-body').innerHTML = rows.map(({ c, st }) => `<tr>
@@ -884,10 +911,10 @@ $('#tr-last').addEventListener('click', e => {
   if (!e.target.closest('#tr-undo')) return;
   const last = trHistory.pop();
   if (!last) return;
-  const times = [...(progressIn(last.key, last.id).times || [])];
+  const times = [...(progressIn(last.key, last.id)[last.field] || [])];
   const i = times.lastIndexOf(last.ms);
   if (i >= 0) times.splice(i, 1);
-  setProgressIn(last.key, last.id, { times: times.length ? times : null });
+  setProgressIn(last.key, last.id, { [last.field]: times.length ? times : null });
   $('#tr-last').hidden = true;
   renderTrainerStats();
 });

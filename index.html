@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CubeLab</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+<nav class="sidebar" aria-label="Navigation">
+  <div class="brand">Cube<span>Lab</span></div>
+  <div class="nav-items">
+    <button class="tab active" data-tab="timer" data-title="Timer" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+      <span>Timer</span>
+    </button>
+    <button class="tab" data-tab="stats" data-title="Statistiques">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 16v-5M11 16V6M16 16v-8"/></svg>
+      <span>Stats</span><em class="soon">bientôt</em>
+    </button>
+    <button class="tab" data-tab="algos" data-title="Algos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
+      <span>Algos</span><em class="soon">bientôt</em>
+    </button>
+    <button class="tab" data-tab="trainer" data-title="Trainer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+      <span>Trainer</span><em class="soon">bientôt</em>
+    </button>
+    <button class="tab" data-tab="lab" data-title="Labo d'algos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></svg>
+      <span>Labo</span>
+    </button>
+    <button class="tab" data-tab="gen" data-title="Générateur d'algos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg>
+      <span data-short="Génér.">Générateur</span>
+    </button>
+  </div>
+  <button id="settings-btn" class="tab nav-settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+    <span>Réglages</span>
+  </button>
+</nav>
+
+<div class="main-col">
+<header class="topbar">
+  <h1 id="page-title">Timer</h1>
+  <div class="selectors">
+    <select id="puzzle" aria-label="Puzzle"></select>
+    <select id="session" aria-label="Session"></select>
+  </div>
+</header>
+
+<main>
+  <section id="view-timer" class="view active">
+    <aside class="side">
+      <div id="stats" class="card stats"></div>
+      <div class="card solves">
+        <table>
+          <thead><tr><th>#</th><th>Temps</th><th>ao5</th><th>ao12</th></tr></thead>
+          <tbody id="solves-body"></tbody>
+        </table>
+        <p id="solves-empty" class="empty">Aucun solve pour l'instant.</p>
+      </div>
+    </aside>
+
+    <div class="stage">
+      <div class="scramble-bar">
+        <div id="scramble" class="scramble"></div>
+        <div class="scramble-actions">
+          <button id="new-scramble" class="btn ghost">Nouveau</button>
+          <button id="copy-scramble" class="btn ghost">Copier</button>
+        </div>
+      </div>
+
+      <div id="timer-zone" class="timer-zone">
+        <div id="timer" class="timer">0.00</div>
+        <div id="timer-hint" class="hint"></div>
+      </div>
+
+      <div id="last-actions" class="last-actions" hidden>
+        <button class="btn" data-pen="">OK</button>
+        <button class="btn" data-pen="+2">+2</button>
+        <button class="btn" data-pen="DNF">DNF</button>
+        <button class="btn danger" data-del>Supprimer</button>
+      </div>
+
+      <div id="preview" class="preview"></div>
+    </div>
+  </section>
+
+  <section id="view-lab" class="view">
+    <div class="lab">
+      <div class="card lab-input">
+        <label for="alg-input">Algorithme</label>
+        <textarea id="alg-input" rows="3" spellcheck="false" placeholder="ex : R U R' U'   ·   [R, U]   ·   [F: (R U R' U')2]   ·   r U R' U'"></textarea>
+        <div class="segmented" role="radiogroup">
+          <label><input type="radio" name="lab-mode" value="result" checked> Résultat de l'algo</label>
+          <label><input type="radio" name="lab-mode" value="case"> Cas que l'algo résout</label>
+        </div>
+        <p id="lab-error" class="error" hidden></p>
+      </div>
+      <div class="lab-grid">
+        <div id="lab-net" class="card lab-net"></div>
+        <div class="card lab-info">
+          <div id="lab-info"></div>
+          <div class="row-btns lab-actions">
+            <button id="lab-solve" class="btn">Résoudre ce cube</button>
+            <button id="lab-to-gen" class="btn">Chercher des algos pour ce cas</button>
+          </div>
+          <div id="lab-solution" class="lab-solution" hidden></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-gen" class="view">
+    <div class="lab">
+      <div class="card lab-input">
+        <label for="gen-input">Cas à résoudre</label>
+        <textarea id="gen-input" rows="2" spellcheck="false" placeholder="Colle un algo connu pour ce cas (ex : T-perm) ou un setup qui le crée"></textarea>
+        <div class="segmented" role="radiogroup">
+          <label><input type="radio" name="gen-mode" value="alg" checked> C'est un algo qui résout le cas</label>
+          <label><input type="radio" name="gen-mode" value="setup"> C'est un setup qui crée le cas</label>
+        </div>
+        <div class="gen-options">
+          <label class="stack">Ce qui doit être résolu
+            <select id="gen-mask">
+              <option value="full">Cube entier (PLL, ZBLL, 1LLL…)</option>
+              <option value="oll">Orientation de la dernière couche (OLL)</option>
+              <option value="f2l">Deux premières couches (F2L)</option>
+            </select>
+          </label>
+          <fieldset class="gen-moves">
+            <legend>Mouvements autorisés</legend>
+            <div id="gen-bases" class="chips"></div>
+          </fieldset>
+          <label class="stack">Longueur max
+            <input type="number" id="gen-max" min="1" max="20" value="14">
+          </label>
+          <div class="stack gen-auf">
+            <label><input type="checkbox" id="gen-preauf" checked> AUF avant (gratuit)</label>
+            <label><input type="checkbox" id="gen-postauf" checked> AUF après (gratuit)</label>
+          </div>
+        </div>
+        <div class="row-btns">
+          <button id="gen-run" class="btn primary">Générer</button>
+          <button id="gen-stop" class="btn" disabled>Arrêter</button>
+          <span id="gen-status" class="muted gen-status"></span>
+        </div>
+        <p id="gen-error" class="error" hidden></p>
+      </div>
+      <div class="gen-grid">
+        <div id="gen-net" class="card lab-net"></div>
+        <div class="card gen-results">
+          <div class="gen-results-head">
+            <strong id="gen-count">Résultats</strong>
+            <label class="muted">Trier par
+              <select id="gen-sort">
+                <option value="len">Longueur</option>
+                <option value="score">Facilité estimée</option>
+              </select>
+            </label>
+          </div>
+          <table>
+            <thead><tr><th>Algo</th><th title="Mouvements (STM)">Mvts</th><th title="Half Turn Metric">HTM</th><th title="Plus bas = plus agréable (estimation : R/U faciles, B/L moins)">Facilité</th><th></th></tr></thead>
+            <tbody id="gen-body"></tbody>
+          </table>
+          <p id="gen-empty" class="empty">Lance une génération pour voir les algos.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-stats" class="view">
+    <div class="placeholder"><h2>Statistiques</h2><p>Graphiques de progression, records, répartition des temps… Cette rubrique arrive bientôt.</p></div>
+  </section>
+  <section id="view-algos" class="view">
+    <div class="placeholder"><h2>Algos</h2><p>Ta bibliothèque d'algos (OLL, PLL…) et ta progression. Cette rubrique arrive bientôt.</p></div>
+  </section>
+  <section id="view-trainer" class="view">
+    <div class="placeholder"><h2>Trainer</h2><p>Entraînement ciblé sur tes cas les plus lents. Cette rubrique arrive bientôt.</p></div>
+  </section>
+</main>
+</div>
+</div>
+
+<dialog id="settings-dialog">
+  <form method="dialog" class="dialog-body">
+    <h2>Réglages</h2>
+    <fieldset>
+      <legend>Timer</legend>
+      <label class="row">Mélanges
+        <select name="scrambleType">
+          <option value="random-state">Random-state (WCA)</option>
+          <option value="random-move">25 mouvements aléatoires</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" name="inspection"> Inspection WCA (15 s)</label>
+      <label class="row"><input type="checkbox" name="voice"> Annonces vocales à 8 s et 12 s</label>
+      <label class="row">Maintien avant départ
+        <select name="holdMs">
+          <option value="0">Aucun</option>
+          <option value="300">0,3 s</option>
+          <option value="550">0,55 s (stackmat)</option>
+        </select>
+      </label>
+      <label class="row">Précision
+        <select name="precision">
+          <option value="2">Centièmes</option>
+          <option value="3">Millièmes</option>
+        </select>
+      </label>
+      <label class="row">Affichage pendant le solve
+        <select name="runningDisplay">
+          <option value="full">Temps complet</option>
+          <option value="seconds">Secondes seulement</option>
+          <option value="hidden">Masqué</option>
+        </select>
+      </label>
+    </fieldset>
+    <fieldset>
+      <legend>Session</legend>
+      <div class="row-btns">
+        <button type="button" class="btn" id="session-new">Nouvelle</button>
+        <button type="button" class="btn" id="session-rename">Renommer</button>
+        <button type="button" class="btn danger" id="session-delete">Supprimer</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Données</legend>
+      <div class="row-btns">
+        <button type="button" class="btn" id="export-btn">Exporter (JSON)</button>
+        <button type="button" class="btn" id="import-btn">Importer</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+    </fieldset>
+    <div class="dialog-actions"><button class="btn primary" value="close">Fermer</button></div>
+  </form>
+</dialog>
+
+<dialog id="solve-dialog">
+  <form method="dialog" class="dialog-body">
+    <h2 id="solve-title"></h2>
+    <p id="solve-date" class="muted"></p>
+    <p id="solve-scramble" class="scramble small"></p>
+    <div class="row-btns">
+      <button type="button" class="btn" data-pen="">OK</button>
+      <button type="button" class="btn" data-pen="+2">+2</button>
+      <button type="button" class="btn" data-pen="DNF">DNF</button>
+      <button type="button" class="btn danger" data-del>Supprimer</button>
+    </div>
+    <label class="stack">Commentaire<textarea id="solve-comment" rows="2"></textarea></label>
+    <div class="dialog-actions"><button class="btn primary" value="close">Fermer</button></div>
+  </form>
+</dialog>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

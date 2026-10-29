@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>CubeLab · tests</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; background: #fff; color: #111; }
+  .ok { color: #137333; } .ko { color: #c5221f; font-weight: 600; }
+  li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<h1 id="title">Tests…</h1>
+<ul id="list"></ul>
+<script type="module">
+  import engine from './js/tests/engine.test.js';
+  import solver from './js/tests/solver.test.js';
+  const results = [...engine, ...solver];
+  const failed = results.filter(r => !r.ok).length;
+  document.getElementById('title').textContent = `${results.length - failed}/${results.length} tests OK`;
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  document.getElementById('list').innerHTML = results
+    .map(r => `<li class="${r.ok ? 'ok' : 'ko'}">${r.ok ? '✓' : '✗'} ${esc(r.name)}${r.msg ? ' — ' + esc(r.msg) : ''}</li>`)
+    .join('');
+  window.__results = results;
+</script>
+</body>
+</html>

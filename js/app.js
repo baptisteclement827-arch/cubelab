@@ -4,7 +4,8 @@ import { parseAlg, formatAlg, formatMove, invertMoves, mirrorMoves, simplify, me
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
-import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=23';
+import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
+import { splitsOf, PHASES } from './splits.js?v=27';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -187,12 +188,22 @@ function deleteSolve(i) {
   persist();
   renderStats();
   $('#last-actions').hidden = true;
+  $('#last-splits').innerHTML = '';
   $('#timer').textContent = Stats.fmt(0, { precision: precision() });
 }
 
 function showLastTime() {
   const last = session().solves.at(-1);
   if (last) $('#timer').textContent = Stats.fmtSolve(last, precision());
+  $('#last-splits').innerHTML = splitsHtml(last);
+}
+
+// « Croix 1.20 · F2L 6.40 · OLL 1.80 · PLL 2.10 » pour un solve au cube connecté.
+function splitsHtml(solve, withMoves = false) {
+  const sp = splitsOf(solve);
+  if (!sp) return '';
+  return PHASES.map((ph, k) => `<span><i class="key sq ph${k}"></i>${ph.name} <b>${Stats.fmt(sp.times[ph.id], { precision: precision() })}</b>`
+    + `${withMoves ? ` <small>${sp.moves[ph.id]} mvts</small>` : ''}</span>`).join('');
 }
 
 /* ---------- Timer ---------- */
@@ -588,6 +599,7 @@ function openSolve(i) {
   openSolveIndex = i;
   $('#solve-title').textContent = `Solve n°${i + 1}${s.mv ? ' (cube connecté)' : ''} · ${Stats.fmtSolve(s, precision())}`;
   $('#solve-date').textContent = new Date(s.d).toLocaleString('fr-FR');
+  $('#solve-splits').innerHTML = splitsHtml(s, true);
   $('#solve-scramble').textContent = s.s;
   $('#solve-comment').value = s.c || '';
   $('#solve-dialog').showModal();
@@ -1517,6 +1529,7 @@ function refreshAll() {
   renderStats();
   newScramble();
   $('#last-actions').hidden = true;
+  $('#last-splits').innerHTML = '';
   $('#timer').textContent = Stats.fmt(0, { precision: precision() });
   $('#timer-hint').textContent = HINTS.idle();
   if (activeTab === 'lab') renderLab();

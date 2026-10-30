@@ -4,6 +4,7 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
+import { cfopSplits } from '../splits.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -116,6 +117,35 @@ test('Suivi du mélange : cube pas résolu au départ', () => {
   const g = guide('R U', "F'");
   eq(formatAlg(g.correction), 'F', 'il faut d\'abord annuler F\'');
   play(g, 'F R U'); ok(g.done, 'puis le mélange');
+});
+
+// ---------- Splits CFOP (cube connecté) ----------
+// Solve fictif : chaque mouvement de la solution à 100 ms d'intervalle.
+const timed = alg => formatAlg(parseAlg(alg)).split(' ').flatMap(m => (m.endsWith('2') ? [m[0], m[0]] : [m])).map((m, i) => [m, (i + 1) * 100]);
+test('Splits : PLL seule (T-perm)', () => {
+  const t = "R U R' U' R' F R2 U' R' U' R U R' F'";
+  const mv = timed(t);
+  const sp = cfopSplits(formatAlg(invertMoves(parseAlg(t))), mv, mv.at(-1)[1]);
+  ok(sp, 'pas de découpage');
+  eq(sp.times.cross + sp.times.f2l + sp.times.oll, 0, 'croix, F2L et OLL déjà faites');
+  eq(sp.moves.pll, mv.length, 'tous les mouvements en PLL');
+});
+test('Splits : OLL (Sune) puis PLL (T-perm), croix jaune (face D)', () => {
+  const sune = "R U R' U R U2 R'", t = "R U R' U' R' F R2 U' R' U' R U R' F'";
+  const mv = timed(`${sune} ${t}`);
+  const sp = cfopSplits(formatAlg(invertMoves(parseAlg(`${sune} ${t}`))), mv, 5000);
+  eq(sp.face, 3, 'croix sur D');
+  eq(sp.moves.oll, 8, 'Sune = 8 quarts de tour');
+  eq(sp.times.oll, 800, 'temps OLL');
+  eq(sp.times.pll, 5000 - 800, 'la PLL finit avec le chrono');
+});
+test('Splits : croix puis F2L détectées', () => {
+  // Mélange qui casse seulement la croix (arête DF) et une paire : F2 puis R U R'.
+  const sol = "R U' R' F2";
+  const mv = timed(sol);
+  const sp = cfopSplits(formatAlg(invertMoves(parseAlg(sol))), mv, mv.at(-1)[1]);
+  ok(sp && sp.moves.cross + sp.moves.f2l + sp.moves.oll + sp.moves.pll === mv.length, JSON.stringify(sp));
+  ok(cfopSplits('R', [['U', 100]], 100) === null, 'solve non résolu : pas de découpage');
 });
 
 export default results;

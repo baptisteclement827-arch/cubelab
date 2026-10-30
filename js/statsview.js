@@ -4,6 +4,7 @@
 // - Algos : entraînement OLL / PLL (états, cas les plus lents).
 // Graphiques en SVG maison, survol avec info-bulle.
 import * as Stats from './stats.js?v=10';
+import { splitsOf, PHASES } from './splits.js?v=27';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -81,6 +82,7 @@ export function renderStatsView(root, solves, { precision }) {
       </div>
       <div class="chart" id="chart-progress"></div>
     </section>
+    ${splitsCard(solves, f)}
     <div class="stats-grid">
       <section class="card chart-card">
         <div class="chart-head"><h2>Répartition des temps</h2></div>
@@ -289,4 +291,34 @@ export function renderAlgosView(root, sets, { precision, check, image }) {
     </section>`;
   }
   root.innerHTML = html;
+}
+
+// ---------- Splits CFOP (solves au cube connecté) ----------
+function splitsCard(solves, f) {
+  const all = solves.map(splitsOf).filter(Boolean);
+  if (!all.length) return '';
+  const rows = PHASES.map((ph, k) => {
+    const times = all.map(sp => sp.times[ph.id]);
+    const moves = all.map(sp => sp.moves[ph.id]);
+    const mean = times.reduce((a, b) => a + b, 0) / times.length;
+    const mvMean = moves.reduce((a, b) => a + b, 0) / moves.length;
+    return { ph, k, mean, best: Math.min(...times), mvMean, tps: mean ? mvMean / (mean / 1000) : 0 };
+  });
+  const total = rows.reduce((a, r) => a + r.mean, 0);
+  return `<section class="card chart-card splits">
+    <div class="chart-head"><h2>Splits CFOP</h2><span class="muted">moyenne sur ${all.length} solve${all.length > 1 ? 's' : ''} au cube connecté</span></div>
+    <div class="split-bar" role="img" aria-label="${rows.map(r => `${r.ph.name} ${f(r.mean, true)}`).join(', ')}">
+      ${rows.map(r => `<i class="ph${r.k}" style="flex:${Math.max(r.mean, 1)}" title="${r.ph.name} ${f(r.mean, true)}"></i>`).join('')}
+    </div>
+    <div class="legend">${rows.map(r => `<span><i class="key sq ph${r.k}"></i>${r.ph.name}</span>`).join('')}</div>
+    <div class="table-scroll"><table class="algo-table">
+      <thead><tr><th>Étape</th><th class="num">Moyenne</th><th class="num">Meilleur</th><th class="num">Part</th><th class="num">Mouvements</th><th class="num">TPS</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><span class="case-cell"><i class="key sq ph${r.k}"></i>${r.ph.name}</span></td>
+        <td class="num">${f(r.mean, true)}</td><td class="num">${f(r.best)}</td>
+        <td class="num">${total ? Math.round((r.mean / total) * 100) : 0} %</td>
+        <td class="num">${r.mvMean.toFixed(1)}</td><td class="num">${r.tps.toFixed(2)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </section>`;
 }

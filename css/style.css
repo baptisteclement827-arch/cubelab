@@ -386,9 +386,24 @@ body.solving .tr-last, body.solving #tr-skip { visibility: hidden; }
 
 /* ---------- Stats ---------- */
 /* Couleurs des séries (validées daltonisme et contraste, clair et sombre) */
-:root { --series-1: #2a78d6; --series-2: #eb6834; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; } }
-:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; }
+:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; } }
+:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; }
+/* Étapes CFOP : croix, F2L, OLL, PLL */
+.ph0 { background: var(--series-1); }
+.ph1 { background: var(--series-2); }
+.ph2 { background: var(--series-3); }
+.ph3 { background: var(--series-4); }
+.split-bar { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; margin: 4px 0 8px; }
+.split-bar i { display: block; min-width: 2px; }
+.splits .legend { margin-bottom: 6px; flex-wrap: wrap; }
+.splits-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 10px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.splits-line:empty { display: none; }
+.splits-line.left { justify-content: flex-start; margin-top: 0; }
+.splits-line span { display: inline-flex; align-items: center; gap: 6px; }
+.splits-line b { color: var(--text); font-weight: 600; }
+.splits-line small { font-size: 12px; }
+body.solving .splits-line { visibility: hidden; }
 
 #view-stats { padding: 16px; overflow: auto; }
 .stats-page { width: 100%; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }

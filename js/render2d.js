@@ -1,5 +1,5 @@
 // Rendu 2D du patron d'un cube NxN en SVG.
-import { FACES, NxNCube } from './core/nxn.js';
+import { FACES } from './core/nxn.js';
 
 // Schéma de couleurs WCA, dans l'ordre U R F D L B (+ gris pour les facettes ignorées).
 export const COLORS = ['#ffffff', '#d7191c', '#14a44d', '#ffd500', '#ff7f0e', '#1f5fd6', '#6b7280'];
@@ -98,24 +98,33 @@ export function renderLL(state, view = 'oll') {
   return `<svg class="ll" viewBox="${-m} ${-m} ${3 + 2 * m} ${3 + 2 * m}" role="img" aria-label="Vue de dessus de la dernière couche">${out}</svg>`;
 }
 
-// Vue 3D (isométrique) du dessus, de la face avant et de la face droite : schémas F2L.
-// Couleurs jaune dessus, blanc dessous, vert devant ; 6 = facette grise (pièce sans importance).
-const F2L_COLORS = [TOP, '#ff7f0e', '#14a44d', '#ffffff', '#d7191c', '#1f5fd6', '#8a909c'];
-const cube3d = new NxNCube(3);
-const ISO = ([x, y, z]) => [((x - z) * 0.866).toFixed(3), ((x + z) * 0.5 - y).toFixed(3)];
+// Schéma F2L, même style que l'OLL/PLL : vue de dessus avec les bandes latérales, prolongée par les deux
+// rangées du bas de la face avant (en dessous) et de la face droite (à droite), là où se trouve le slot FR.
+// Couleurs jaune dessus, blanc dessous, vert devant ; 6 = pièce sans importance (gris foncé).
+const F2L_COLORS = [TOP, '#ff7f0e', '#14a44d', '#ffffff', '#d7191c', '#1f5fd6', OFF];
 
 export function renderF2L(state) {
+  const color = i => F2L_COLORS[state[i]] ?? OFF;
+  // Contour discret sur les facettes blanches, sinon invisibles sur fond clair.
+  const cell = (x, y, w, h, i) => `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w}" height="${h}" rx="0.1" fill="${color(i)}"${state[i] === 3 ? ' class="white-sticker"' : ''}/>`;
+  const s = 0.94, t = 0.3, g = 0.08;
   let out = '';
-  for (const f of [0, 2, 1]) { // U, F, R
-    for (let k = 0; k < 9; k++) {
-      const i = f * 9 + k;
-      const p = cube3d.points[i];
-      const axis = p.findIndex(v => Math.abs(v) === 3);
-      const [a, b] = [0, 1, 2].filter(d => d !== axis);
-      const inset = 0.92;
-      const corner = (da, db) => { const q = p.slice(); q[a] += da * inset; q[b] += db * inset; return ISO(q).join(','); };
-      out += `<polygon points="${corner(-1, -1)} ${corner(1, -1)} ${corner(1, 1)} ${corner(-1, 1)}" fill="${F2L_COLORS[state[i]] ?? OFF}"/>`;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out += cell(c + 0.03, r + 0.03, s, s, r * 3 + c);
+  for (let k = 0; k < 3; k++) {
+    out += cell(2 - k + 0.03, -g - t, s, t, 45 + k); // B : bande du haut
+    out += cell(-g - t, k + 0.03, t, s, 36 + k);     // L : bande du haut
+    out += cell(k + 0.03, 3 + g, s, t, 18 + k);      // F : rangée du haut (bande)
+    out += cell(3 + g, 2 - k + 0.03, t, s, 9 + k);   // R : rangée du haut (bande)
+  }
+  // Rangées du milieu et du bas : F en dessous, R à droite (dépliées).
+  const y0 = 3 + g + t + g, x0 = 3 + g + t + g;
+  for (let r = 1; r < 3; r++) {
+    for (let k = 0; k < 3; k++) {
+      out += cell(k + 0.03, y0 + (r - 1) + 0.03, s, s, 18 + r * 3 + k);
+      out += cell(x0 + (r - 1) + 0.03, 2 - k + 0.03, s, s, 9 + r * 3 + k);
     }
   }
-  return `<svg class="ll f2l" viewBox="-5.5 -6.3 11 12.6" role="img" aria-label="Schéma du cas F2L">${out}</svg>`;
+  const m = t + 0.12;
+  const w = x0 + 2 + 0.1 + m, h = y0 + 2 + 0.1 + m;
+  return `<svg class="ll f2l" viewBox="${-m} ${-m} ${w} ${h}" role="img" aria-label="Schéma du cas F2L">${out}</svg>`;
 }

@@ -267,6 +267,7 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case:hover { border-color: var(--border); }
 .case.open { border-color: var(--accent); }
 .case .ll { width: 100%; max-width: 110px; height: auto; display: block; }
+.ll .white-sticker { stroke: #8a909c; stroke-width: 0.05; }
 .case-name { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 5px; }
 /* Pastille d'état : orange = en apprentissage, vert = appris. */
 .case.learning .case-name::before, .case.learned .case-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }

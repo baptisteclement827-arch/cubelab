@@ -332,7 +332,10 @@ $('#device-btn').onclick = async () => {
     ganTimer = await connectGanTimer({
       onEvent(evt) {
         const kind = GAN_EVENTS[evt.state];
-        if (kind === 'start') solveInput = 'timer';
+        if (kind === 'start') {
+          solveInput = 'timer';
+          smart.solveMoves = smart.conn ? [] : null; // le cube connecté enregistre les mouvements de ce solve
+        }
         const t = activeTimer();
         if (kind && t) t.device({ kind, ms: evt.ms });
       },
@@ -355,8 +358,10 @@ const cube3 = new NxNCube(3);
 const faceletsToState = f => Uint8Array.from(f, c => 'URFDLB'.indexOf(c));
 const sameState = (a, b) => a && b && a.every((v, i) => v === b[i]);
 const scrambleState = () => cube3.applyAlg(cube3.solved(), scramble || '');
-// Le cube pilote le chrono seulement si le timer GAN n'est pas connecté.
-const smartTimes = () => !!smart.conn && !ganTimer && activeTab === 'timer';
+// Dans le Timer, le cube connecté détecte le mélange et enregistre les mouvements du solve.
+// Sans timer GAN, il pilote aussi le chrono ; avec le timer GAN, c'est le tapis qui chronomètre.
+const smartTimes = () => !!smart.conn && activeTab === 'timer';
+const cubeDrivesClock = () => smartTimes() && !ganTimer;
 
 function setCubeStatus(status) {
   $('#cube-btn').dataset.status = status;
@@ -379,7 +384,8 @@ function renderPreview() {
 function smartHint() {
   if (!smartTimes()) return '';
   if (!smart.state) return 'Lecture de l\'état du cube…';
-  return smart.phase === 'ready' ? 'Mélange fait : le chrono part au premier mouvement' : 'Fais le mélange sur le cube';
+  if (smart.phase !== 'ready') return 'Fais le mélange sur le cube';
+  return ganTimer ? 'Mélange fait : pose les mains sur le timer' : 'Mélange fait : le chrono part au premier mouvement';
 }
 
 // Nouveau mélange : on attend que le vrai cube y arrive.
@@ -398,7 +404,12 @@ function checkScrambled() {
 function onSmartMove(move) {
   smart.state = cube3.apply(smart.state, parseAlg(move));
   const now = performance.now();
-  if (smartTimes()) {
+  if (smartTimes() && !cubeDrivesClock()) {
+    // Avec le timer GAN : on enregistre les mouvements pendant que le chrono tourne.
+    if (timer.state === 'running') (smart.solveMoves ||= []).push([move, Math.round(now - timer.startTime)]);
+    else if (smart.phase === 'scrambling') checkScrambled();
+    else if (smart.phase === 'ready' && !sameState(smart.state, scrambleState())) smart.phase = 'scrambling';
+  } else if (smartTimes()) {
     if (smart.phase === 'ready') {
       // Premier mouvement après le mélange : départ.
       timer.device({ kind: 'start' });

@@ -1,7 +1,7 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
 import { parseAlg, mirrorMoves, formatAlg } from '../core/notation.js';
-import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L, GRAY } from '../algsets/index.js';
+import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L, GRAY, slotView } from '../algsets/index.js';
 import { timeStats } from '../stats.js';
 
 const results = [];
@@ -219,6 +219,16 @@ test('F2L : variante qui utilise des slots libres', () => {
   const alg = "R U R' B U B'"; // B U B' dérange les slots arrière
   ok(solvesF2L(c, 'FR', alg) === null, 'refusée si les slots arrière sont remplis');
   ok(solvesF2L(c, 'FR', alg, ['BR', 'BL']) !== null, 'acceptée si BR et BL sont libres');
+});
+
+test('F2L : vue d\'un autre slot ramenée en FR, et mélange aléatoire pour un slot', () => {
+  for (const c of f2l.CASES.slice(0, 10)) {
+    const fr = Array.from(f2lCaseState(c, 'FR')).join();
+    for (const sl of SLOTS) ok(Array.from(slotView(f2lCaseState(c, sl.id), sl.id)).join() === fr, `${c.name} vu depuis ${sl.id}`);
+    const st = randomCaseState(f2l, c, Math.random, { auf: false, setup: slotAlg(c, 'BL') });
+    const after = relabel(c3.apply(st, parseAlg(slotAlg(c, 'BL'))));
+    ok(f2lSolved(after), `${c.name} : mélange aléatoire en BL`);
+  }
 });
 
 export default results;

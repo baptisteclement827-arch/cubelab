@@ -97,7 +97,8 @@ const randomAuf = (rand = Math.random) => parseAlg(AUFS[Math.floor(rand() * 4)])
 
 // État aléatoire où le cas se présente. auf : AUF aléatoire avant (et après pour la PLL) ;
 // sans AUF, le cas est exactement sous l'angle de l'algo. Pour l'OLL, la permutation est toujours aléatoire.
-export function randomCaseState(set, c, rand = Math.random, { auf = true } = {}) {
+// setup : algo à défaire à la place de celui du cas (algo d'un autre slot F2L, variante…).
+export function randomCaseState(set, c, rand = Math.random, { auf = true, setup = null } = {}) {
   let s = cube3.solved();
   if (set.view === 'oll') {
     const pll = ALG_SETS['333/pll'];
@@ -115,7 +116,7 @@ export function randomCaseState(set, c, rand = Math.random, { auf = true } = {})
   } else if (auf) {
     s = cube3.apply(s, randomAuf(rand));
   }
-  s = relabel(cube3.apply(s, invertMoves(parseAlg(c.alg))));
+  s = relabel(cube3.apply(s, invertMoves(parseAlg(setup || c.alg))));
   return auf ? cube3.apply(s, randomAuf(rand)) : s;
 }
 
@@ -206,4 +207,17 @@ export function solvesF2L(c, slotId, alg, empty = []) {
     if (s.every((v, i) => v === GRAY || v === faceOf(i))) return auf;
   }
   return null;
+}
+
+// Vue d'un cas F2L d'un autre slot depuis l'avant droit : on tourne le cube pour amener ce slot en FR.
+export function slotView(state, slotId = 'FR') {
+  const rot = slotOf(slotId)?.rot;
+  return rot ? relabel(cube3.apply(state, parseAlg(rot))) : state;
+}
+
+// Grise les pièces de la dernière couche (celles qui portent une facette de la couleur du dessus).
+export function maskLL(state) {
+  const s = Uint8Array.from(state);
+  for (const p of PIECES) if (p.some(i => state[i] === 0)) for (const i of p) s[i] = GRAY;
+  return s;
 }

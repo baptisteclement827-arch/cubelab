@@ -371,7 +371,8 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .train-btn { margin-left: auto; align-self: stretch; padding: 0 22px; font-size: 15px; }
 .train-btn[hidden] { display: none; }
 .train-bar { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-.train-bar[hidden], .train-foot[hidden] { display: none; }
+.train-bar[hidden], .train-foot[hidden], .train-f2l[hidden] { display: none; }
+.train-f2l .chip span { font-family: inherit; }
 .train-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .train-row > .muted { min-width: 70px; font-size: 14px; }
 /* Pied de page collant : compteur + Annuler/Lancer toujours visibles pendant la sélection. */

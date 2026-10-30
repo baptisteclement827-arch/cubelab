@@ -12,7 +12,7 @@ import { connectMoyu32 } from './devices/moyu32.js?v=20';
 import { ScrambleGuide } from './scramble-guide.js?v=26';
 import { picker } from './picker.js?v=16';
 import { renderNet, renderLL, renderF2L } from './render2d.js?v=30';
-import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L } from './algsets/index.js?v=28';
+import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L, slotView, maskLL } from './algsets/index.js?v=32';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -1139,13 +1139,21 @@ const trainOpts = {
   dist: data.trainer?.dist || 'balanced',
   check: data.trainer?.check || 'off',
   auf: data.trainer?.auf || 'on',
+  slots: data.trainer?.slots || ['FR'],       // F2L : slots entraînés
+  variants: data.trainer?.variants || 'off',  // F2L : variantes (off | on | only)
 };
+const VARIANT_MODES = [{ id: 'off', name: 'Sans' }, { id: 'on', name: 'Avec' }, { id: 'only', name: 'Seulement' }];
 // Les temps avec check visuel (cas montré avant l'essai) sont rangés à part.
 const timesField = check => (check === 'on' ? 'timesCheck' : 'times');
 const scramblePicker = picker($('#train-scramble'), { label: 'Mélange', onChange(id) { trainOpts.scramble = id; } });
 const distPicker = picker($('#train-dist'), { label: 'Répartition', onChange(id) { trainOpts.dist = id; } });
 const checkPicker = picker($('#train-check'), { label: 'Check visuel', onChange(id) { trainOpts.check = id; } });
 const aufPicker = picker($('#train-auf'), { label: 'AUF', onChange(id) { trainOpts.auf = id; } });
+const variantsPicker = picker($('#train-variants'), { label: 'Variantes', onChange(id) { trainOpts.variants = id; renderTrainBar(); } });
+$('#train-slots').addEventListener('change', () => {
+  trainOpts.slots = [...document.querySelectorAll('#train-slots input:checked')].map(i => i.value);
+  renderTrainBar();
+});
 
 function renderTrainBar() {
   $('#view-algos').classList.toggle('selecting', selecting);
@@ -1165,6 +1173,15 @@ function renderTrainBar() {
   distPicker.set(DISTRIBUTIONS, trainOpts.dist);
   checkPicker.set(CHECK_MODES, trainOpts.check);
   aufPicker.set(AUF_MODES, trainOpts.auf);
+  // F2L : slots à entraîner et variantes.
+  const f2l = set.view === 'f2l';
+  document.querySelector('.train-f2l').hidden = !f2l;
+  if (f2l) {
+    $('#train-slots').innerHTML = SLOTS.map(sl => `<label class="chip"><input type="checkbox" value="${sl.id}" ${trainOpts.slots.includes(sl.id) ? 'checked' : ''}><span>${sl.name}</span></label>`).join('');
+    variantsPicker.set(VARIANT_MODES, trainOpts.variants);
+  }
+  const noTarget = f2l && !trainOpts.slots.length && trainOpts.variants !== 'only';
+  if (noTarget) $('#train-start').disabled = true;
   $('#train-start').disabled = !n;
   $('#train-start').textContent = n ? `Lancer (${n})` : 'Lancer';
 }
@@ -1198,6 +1215,11 @@ $('#train-status').addEventListener('click', e => {
 });
 $('#train-start').onclick = () => {
   if (!selection.size) return;
+  if (currentSet().view === 'f2l' && trainOpts.variants === 'only'
+    && ![...selection].some(id => progress(id).variants?.some(v => trainOpts.slots.includes(v.slot) || !trainOpts.slots.length))) {
+    alert('Aucune variante pour ces cas : ajoute des variantes dans leurs fiches, ou choisis « Avec ».');
+    return;
+  }
   data.trainer = { set: setKey(), ids: [...selection], ...trainOpts, active: true };
   persist();
   setSelecting(false);
@@ -1229,7 +1251,8 @@ const trainerTimer = new Timer({
     const field = timesField(data.trainer.check);
     const times = [...(progressIn(training.key, c.id)[field] || []), ms];
     setProgressIn(training.key, c.id, { [field]: times });
-    trHistory.push({ key: training.key, id: c.id, ms, field });
+    const { target } = training.current;
+    trHistory.push({ key: training.key, id: c.id, ms, field, alg: target.alg, label: target.label });
     $('#tr-timer').textContent = Stats.fmt(ms, { precision: precision() });
     showLastAttempt();
     renderTrainerStats();
@@ -1240,6 +1263,22 @@ const trainerTimer = new Timer({
 const trZone = $('#tr-timer-zone');
 trZone.addEventListener('pointerdown', e => { if (isTouch(e) && training?.current) { e.preventDefault(); trainerTimer.pointerDown(); } });
 trZone.addEventListener('pointerup', e => { if (isTouch(e) && training?.current) trainerTimer.pointerUp(); });
+
+// Ce qu'on entraîne sur un cas : son algo (OLL/PLL) ; en F2L, un des slots choisis ou une de ses variantes.
+function targetsFor(c) {
+  const p = progressIn(training.key, c.id);
+  if (training.set.view !== 'f2l') return [{ alg: p.alg || c.alg, label: '' }];
+  const cfg = data.trainer;
+  const slots = cfg.slots || ['FR'];
+  const out = cfg.variants === 'only' ? [] : slots.map(id => ({ slot: id, alg: p.slots?.[id] || slotAlg(c, id), label: id }));
+  if (cfg.variants === 'on' || cfg.variants === 'only') {
+    for (const v of p.variants || []) {
+      if (slots.length && !slots.includes(v.slot)) continue;
+      out.push({ slot: v.slot, alg: v.alg, label: `${v.slot} · ${v.empty.join(' + ')} libre${v.empty.length > 1 ? 's' : ''}` });
+    }
+  }
+  return out;
+}
 
 function pickCase() {
   const { set, cases } = training;
@@ -1252,15 +1291,16 @@ function pickCase() {
 async function prepareAttempt() {
   const { set, key } = training;
   const c = pickCase();
+  const targets = targetsFor(c);
+  const target = targets[Math.floor(Math.random() * targets.length)];
   const auf = data.trainer.auf !== 'off';
   if (data.trainer.scramble === 'inverse') {
-    const p = progressIn(key, c.id);
-    const setup = reverseSetup(p.alg || p.slots?.FR || c.alg, Math.random, { auf });
-    return { c, state: stateAfter(setup), scramble: formatAlg(simplify(setup)) };
+    const setup = reverseSetup(target.alg, Math.random, { auf });
+    return { c, target, state: stateAfter(setup), scramble: formatAlg(simplify(setup)) };
   }
-  const state = randomCaseState(set, c, Math.random, { auf });
+  const state = randomCaseState(set, c, Math.random, { auf, setup: target.alg });
   const sol = await solver.solve(state);
-  return { c, state, scramble: formatAlg(invertMoves(parseAlg(sol))) };
+  return { c, target, state, scramble: formatAlg(invertMoves(parseAlg(sol))) };
 }
 
 // Essais déjà affichés : ← revient en arrière, → avance (ou tire un nouveau cas au bout de la liste).
@@ -1271,8 +1311,10 @@ function showAttempt(attempt) {
   const show = data.trainer.check === 'on';
   $('#tr-preview').hidden = !show;
   if (show) {
-    const img = training.set.view === 'f2l' ? renderF2L(attempt.state) : renderLL(attempt.state, training.set.view);
-    $('#tr-preview').innerHTML = `${img}<strong>${esc(attempt.c.name)}</strong>`;
+    // F2L : le cas est montré vu depuis son slot (ramené devant à droite), avec le slot ou la variante.
+    const t = attempt.target;
+    const img = training.set.view === 'f2l' ? renderF2L(maskLL(slotView(attempt.state, t.slot))) : renderLL(attempt.state, training.set.view);
+    $('#tr-preview').innerHTML = `${img}<strong>${esc(attempt.c.name)}${t.label ? ` · ${esc(t.label)}` : ''}</strong>`;
   }
 }
 
@@ -1312,9 +1354,10 @@ function startTraining() {
   const cfg = data.trainer;
   if (!cfg || cfg.active === false) { training = null; return; }
   const set = ALG_SETS[cfg.set];
-  const cases = set ? set.CASES.filter(c => cfg.ids.includes(c.id)) : [];
-  if (!cases.length) { training = null; return; }
-  training = { key: cfg.set, set, cases, current: null, next: null, shown: [], pos: -1, loading: false };
+  training = { key: cfg.set, set, cases: [], current: null, next: null, shown: [], pos: -1, loading: false };
+  // Seuls les cas qui ont quelque chose à entraîner (en F2L « variantes seulement », ceux qui ont des variantes).
+  training.cases = set ? set.CASES.filter(c => cfg.ids.includes(c.id) && targetsFor(c).length) : [];
+  if (!training.cases.length) { training = null; return; }
   $('#tr-timer').textContent = Stats.fmt(0, { precision: precision() });
   $('#tr-last').hidden = true;
   $('#tr-preview').hidden = true;
@@ -1331,7 +1374,8 @@ function renderTrainer() {
   const opt = (list, id) => list.find(x => x.id === id).name.toLowerCase();
   $('#tr-summary').innerHTML = `<strong>${esc(PUZZLES[puzzle].name)} · ${esc(setName)}</strong>
     <span class="muted">${training.cases.length} cas · mélange ${opt(SCRAMBLE_MODES, data.trainer.scramble)} · répartition ${opt(DISTRIBUTIONS, data.trainer.dist)}
-      · ${opt(CHECK_MODES, data.trainer.check || 'off')} check visuel · ${opt(AUF_MODES, data.trainer.auf || 'on')} AUF</span>`;
+      · ${opt(CHECK_MODES, data.trainer.check || 'off')} check visuel · ${opt(AUF_MODES, data.trainer.auf || 'on')} AUF${training.set.view === 'f2l'
+        ? ` · slots ${(data.trainer.slots || ['FR']).join(', ') || 'aucun'} · variantes ${opt(VARIANT_MODES, data.trainer.variants || 'off')}` : ''}</span>`;
   $('#tr-hint').textContent = 'Fais le mélange, puis maintiens Espace et relâche pour démarrer';
   renderTrainerStats();
 }
@@ -1352,14 +1396,12 @@ function showLastAttempt() {
   const last = trHistory.at(-1);
   const set = ALG_SETS[last.key];
   const c = set.CASES.find(x => x.id === last.id);
-  const p = progressIn(last.key, c.id);
-  const alg = p.alg || p.slots?.FR || c.alg;
   $('#tr-last').hidden = false;
   $('#tr-last').innerHTML = `
     <div class="tr-last-img">${caseImageFor(c)}</div>
     <div class="tr-last-body">
-      <div><strong>${esc(c.name)}</strong> · ${Stats.fmt(last.ms, { precision: precision() })}</div>
-      <code>${esc(alg)}</code>
+      <div><strong>${esc(c.name)}</strong>${last.label ? ` · ${esc(last.label)}` : ''} · ${Stats.fmt(last.ms, { precision: precision() })}</div>
+      <code>${esc(last.alg)}</code>
     </div>
     <button type="button" class="btn ghost danger" id="tr-undo">Supprimer ce temps</button>`;
 }

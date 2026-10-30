@@ -397,6 +397,8 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .dr-options { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .dr-options .picker-btn { width: 100%; }
 .dr-row { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.dr-levels button { padding: 6px 4px; font-size: 13px; white-space: nowrap; }
+.dr-level-title { font-size: 12px; }
 .dr-stats { padding: 12px 14px; }
 .dr-stats table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 .dr-stats th { text-align: right; font-weight: 500; color: var(--muted); font-size: 12px; padding-bottom: 4px; }

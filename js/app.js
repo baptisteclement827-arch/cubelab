@@ -6,7 +6,8 @@ import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
-import { DRILLS, DrillTimer, drillStats } from './drills.js?v=34';
+import { DRILLS, DrillTimer, drillStats, LEVELS, levelOf, whiteCrossLength } from './drills.js?v=35';
+import { randomMoveScramble } from './core/scramble.js';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -1452,7 +1453,8 @@ renderAlgos();
 // BLD Cross + X : analyse sans limite, puis exécution (à l'aveugle) chronométrée. Avec le cube connecté,
 // la réussite est vérifiée (cross + paires en place) ; sinon on la note soi-même.
 let drillId = data.drillId || DRILLS[0].id;
-let drillPairs = data.drillPairs ?? 0;
+// Niveau : Cross 1 / 2 / 3 (longueur de la cross blanche), puis +1 et +2 paires.
+let drillLevel = LEVELS.find(l => l.id === data.drillLevel) || LEVELS[0];
 let drillScramble = '';
 let drillPending = null; // essai terminé, en attente de « Réussi / Raté »
 const drillList = () => ((data.drills ||= {})[drillId] ||= []);
@@ -1490,11 +1492,11 @@ const drillTimer = new DrillTimer({
     $('#dr-hint').textContent = drillPending && v.state === 'done' ? '' : DRILL_HINTS[v.state] ?? '';
   },
   onDone({ analysis, exec }) {
-    drillPending = { n: drillPairs, s: drillScramble, analysis, exec, d: Date.now() };
+    drillPending = { level: drillLevel.id, n: drillLevel.pairs, s: drillScramble, analysis, exec, d: Date.now() };
     // Cube connecté : vérification automatique (cross d'une couleur quelconque + au moins n paires).
     if (smart.conn && smart.state) {
       const r = crossAndPairs(smart.state);
-      saveDrill(r.cross && r.pairs >= drillPairs, true, r);
+      saveDrill(r.cross && r.pairs >= drillLevel.pairs, true, r);
     } else {
       showDrillResult();
     }
@@ -1510,7 +1512,7 @@ function showDrillResult(auto) {
   r.hidden = false;
   if (drillPending) {
     $('#dr-hint').textContent = '';
-    r.innerHTML = `<span>Cross${drillPending.n ? ` + ${drillPending.n} paire${drillPending.n > 1 ? 's' : ''}` : ''} réussie ?</span>
+    r.innerHTML = `<span>${drillPending.n ? `Cross + ${drillPending.n} paire${drillPending.n > 1 ? 's' : ''}` : 'Cross'} réussie ?</span>
       <button type="button" class="btn ok-btn" data-drill-ok="1">Réussi</button>
       <button type="button" class="btn danger" data-drill-ok="0">Raté</button>`;
   } else if (auto) {
@@ -1531,19 +1533,38 @@ function saveDrill(ok, auto, check) {
   $('#dr-hint').textContent = DRILL_HINTS.done;
 }
 
+// Mélange du niveau : pour Cross 1/2/3, on tire des états jusqu'à ce que la cross blanche ait la bonne
+// longueur, puis on en donne un mélange « random-state » (solution de Kociemba inversée).
+let drillScrambleToken = 0;
 async function newDrillScramble() {
   const drill = DRILLS.find(d => d.id === drillId);
+  const token = ++drillScrambleToken;
+  const lvl = drillLevel;
   $('#dr-scramble').textContent = 'Génération du mélange…';
-  drillScramble = await PUZZLES[drill.puzzle].scramble({ type: settings().scrambleType });
+  let scr;
+  if (lvl.min !== undefined) {
+    const c = cube();
+    let state;
+    for (let i = 0; i < 2000; i++) {
+      scr = randomMoveScramble({ length: 25 });
+      state = c.applyAlg(c.solved(), scr);
+      const len = whiteCrossLength(state);
+      if (len >= lvl.min && len <= lvl.max) break;
+    }
+    try { scr = formatAlg(invertMoves(parseAlg(await solver.solve(state)))); } catch { /* on garde le mélange aléatoire */ }
+  } else {
+    scr = await PUZZLES[drill.puzzle].scramble({ type: settings().scrambleType });
+  }
+  if (token !== drillScrambleToken) return;
+  drillScramble = scr;
   $('#dr-scramble').textContent = drillScramble;
 }
 
 function renderDrills() {
   drillPicker.set(DRILLS, drillId);
-  document.querySelectorAll('#dr-pairs [data-n]').forEach(b => {
-    b.classList.toggle('on', Number(b.dataset.n) === drillPairs);
-    b.setAttribute('aria-selected', Number(b.dataset.n) === drillPairs);
-  });
+  $('#dr-levels').innerHTML = LEVELS.map(l => `<button type="button" role="tab" data-level="${l.id}" title="${l.title}"
+    class="${l.id === drillLevel.id ? 'on' : ''}" aria-selected="${l.id === drillLevel.id}">${l.name}</button>`).join('');
+  $('#dr-level-title').textContent = drillLevel.title;
   if (!drillScramble) newDrillScramble();
   if (!drillTimer.busy && drillTimer.state !== 'done') {
     $('#dr-timer').textContent = '0.0';
@@ -1557,18 +1578,20 @@ function renderDrillStats() {
   const list = drillList();
   const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
   const sec = ms => (ms == null ? '–' : `${(ms / 1000).toFixed(1)} s`);
-  const rows = [0, 1, 2].map(n => ({ n, st: drillStats(list.filter(x => x.n === n)) })).filter(r => r.st);
+  // Une ligne par niveau (« Cross » seul : essais d'avant les niveaux).
+  const levelName = id => LEVELS.find(l => l.id === id)?.name || 'Cross';
+  const rows = ['c1', 'c2', 'c3', 'c', 'x1', 'x2'].map(id => ({ id, st: drillStats(list.filter(x => levelOf(x) === id)) })).filter(r => r.st);
   $('#dr-stats').innerHTML = rows.length ? `<table>
       <thead><tr><th></th><th>Essais</th><th>Réussite</th><th>Analyse</th><th>Exéc.</th></tr></thead>
-      <tbody>${rows.map(({ n, st }) => `<tr class="${n === drillPairs ? 'current' : ''}">
-        <td>${n ? `+${n}` : 'Cross'}</td><td>${st.count}</td><td>${Math.round(st.success * 100)} %</td><td>${sec(st.analysis)}</td><td>${f(st.exec)}</td>
+      <tbody>${rows.map(({ id, st }) => `<tr class="${id === drillLevel.id ? 'current' : ''}">
+        <td>${levelName(id)}</td><td>${st.count}</td><td>${Math.round(st.success * 100)} %</td><td>${sec(st.analysis)}</td><td>${f(st.exec)}</td>
       </tr>`).join('')}</tbody>
     </table><p class="muted dr-note">Moyennes sur les essais réussis.</p>`
     : '<p class="empty">Les stats apparaîtront après ton premier essai.</p>';
   const rowsH = [];
   for (let i = list.length - 1; i >= Math.max(0, list.length - 100); i--) {
     const x = list[i];
-    rowsH.push(`<tr><td>${i + 1}</td><td>${x.n ? `+${x.n}` : 'C'}</td><td>${sec(x.analysis)}</td>
+    rowsH.push(`<tr><td>${i + 1}</td><td>${levelName(levelOf(x)).replace('Cross ', 'C')}</td><td>${sec(x.analysis)}</td>
       <td class="${x.ok ? '' : 'dr-fail'}">${Stats.fmt(x.exec, { precision: precision() })}</td>
       <td><span class="${x.ok ? 'yes' : 'no'}">${x.ok ? '✓' : '✗'}</span> <button type="button" class="btn ghost dr-del" data-del-drill="${i}" title="Supprimer">×</button></td></tr>`);
   }
@@ -1576,12 +1599,14 @@ function renderDrillStats() {
   $('#dr-empty').hidden = list.length > 0;
 }
 
-$('#dr-pairs').addEventListener('click', e => {
-  const b = e.target.closest('[data-n]');
-  if (!b || drillTimer.busy) return;
-  drillPairs = data.drillPairs = Number(b.dataset.n);
+$('#dr-levels').addEventListener('click', e => {
+  const b = e.target.closest('[data-level]');
+  if (!b || drillTimer.busy || b.dataset.level === drillLevel.id) return;
+  drillLevel = LEVELS.find(l => l.id === b.dataset.level);
+  data.drillLevel = drillLevel.id;
   persist();
   renderDrills();
+  newDrillScramble(); // le mélange doit correspondre au niveau
 });
 $('#dr-new').onclick = () => { if (!drillTimer.busy) newDrillScramble(); };
 $('#dr-result').addEventListener('click', e => {

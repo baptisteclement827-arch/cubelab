@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=35">
 </head>
 <body>
 <div class="app">
@@ -240,12 +240,9 @@
       <div class="card dr-options">
         <div id="dr-drill"></div>
         <div class="dr-row">
-          <span class="muted">Paires à prévoir</span>
-          <div id="dr-pairs" class="seg" role="tablist" aria-label="Paires à prévoir">
-            <button type="button" role="tab" data-n="0">Cross</button>
-            <button type="button" role="tab" data-n="1">+1</button>
-            <button type="button" role="tab" data-n="2">+2</button>
-          </div>
+          <span class="muted">Niveau</span>
+          <div id="dr-levels" class="seg dr-levels" role="tablist" aria-label="Niveau"></div>
+          <span id="dr-level-title" class="muted dr-level-title"></span>
         </div>
       </div>
       <div id="dr-stats" class="card dr-stats"></div>
@@ -397,6 +394,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=34"></script>
+<script type="module" src="js/app.js?v=35"></script>
 </body>
 </html>

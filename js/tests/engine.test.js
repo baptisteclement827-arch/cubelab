@@ -5,6 +5,7 @@ import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
 import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
+import { whiteCrossLength } from '../drills.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -157,6 +158,15 @@ test('Drill : croix et paires en place', () => {
   ok(pairsSolved(r1, 3) < 4, "R U R' dérange au moins une paire");
   ok(crossAndPairs(run('F')).cross, 'F : une autre croix (ex. B) reste faite');
   eq(pairsSolved(run("R U R' U'"), 3), 3, 'sexy move : seule la paire FR est dérangée');
+});
+
+test('Longueur de la cross blanche', () => {
+  eq(whiteCrossLength(run('')), 0, 'résolu');
+  eq(whiteCrossLength(run('D2')), 0, 'D ne touche pas la cross blanche (en haut)');
+  eq(whiteCrossLength(run('R')), 1, 'R');
+  eq(whiteCrossLength(run("F R")), 2, 'F R');
+  const lens = Array.from({ length: 40 }, () => whiteCrossLength(run(randomMoveScramble({ length: 25 }))));
+  ok(Math.max(...lens) <= 8, `une cross se fait toujours en 8 mouvements au plus (${Math.max(...lens)})`);
 });
 
 export default results;

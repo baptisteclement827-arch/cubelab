@@ -4,6 +4,7 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
+import { renderStatsView } from './statsview.js?v=22';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -449,13 +450,32 @@ $('#last-actions').addEventListener('click', e => {
   else setPenalty(i, b.dataset.pen);
 });
 
-$('#stats-source').addEventListener('click', e => {
-  const b = e.target.closest('[data-source]');
-  if (!b) return;
-  statsSource = b.dataset.source;
-  data.statsSource = statsSource;
-  persist();
-  renderStats();
+// Onglets Timer / Smart : même choix dans le Timer et dans l'onglet Stats.
+for (const sel of ['#stats-source', '#sv-source']) {
+  $(sel).addEventListener('click', e => {
+    const b = e.target.closest('[data-source]');
+    if (!b) return;
+    statsSource = b.dataset.source;
+    data.statsSource = statsSource;
+    persist();
+    renderStats();
+    if (activeTab === 'stats') renderStatsPage();
+  });
+}
+
+function renderStatsPage() {
+  document.querySelectorAll('#sv-source [data-source]').forEach(b => {
+    b.classList.toggle('on', b.dataset.source === statsSource);
+    b.setAttribute('aria-selected', b.dataset.source === statsSource);
+  });
+  const solves = session().solves.filter(s => solveSource(s) === statsSource);
+  renderStatsView($('#stats-view'), solves, { precision: precision(), smart: statsSource === 'smart' });
+}
+// Les graphiques suivent la largeur de la fenêtre.
+let statsWidth = innerWidth;
+addEventListener('resize', () => {
+  if (activeTab === 'stats' && innerWidth !== statsWidth) renderStatsPage();
+  statsWidth = innerWidth;
 });
 
 $('#solves-body').addEventListener('click', e => {
@@ -600,6 +620,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
     if (activeTab === 'trainer') renderTrainer();
+    if (activeTab === 'stats') renderStatsPage();
   };
 });
 
@@ -1379,6 +1400,7 @@ function refreshAll() {
   $('#timer').textContent = Stats.fmt(0, { precision: precision() });
   $('#timer-hint').textContent = HINTS.idle();
   if (activeTab === 'lab') renderLab();
+  if (activeTab === 'stats') renderStatsPage();
 }
 
 refreshAll();

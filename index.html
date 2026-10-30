@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=21">
+<link rel="stylesheet" href="css/style.css?v=22">
 </head>
 <body>
 <div class="app">
@@ -17,7 +17,7 @@
     </button>
     <button class="tab" data-tab="stats" data-title="Statistiques">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 16v-5M11 16V6M16 16v-8"/></svg>
-      <span>Stats</span><em class="soon">bientôt</em>
+      <span>Stats</span>
     </button>
     <button class="tab" data-tab="algos" data-title="Algos">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>
@@ -186,7 +186,13 @@
   </section>
 
   <section id="view-stats" class="view">
-    <div class="placeholder"><h2>Statistiques</h2><p>Graphiques de progression, records, répartition des temps… Cette rubrique arrive bientôt.</p></div>
+    <div class="stats-page">
+      <div id="sv-source" class="seg sv-source" role="tablist" aria-label="Source des solves">
+        <button type="button" role="tab" data-source="timer">Timer</button>
+        <button type="button" role="tab" data-source="smart">Smart</button>
+      </div>
+      <div id="stats-view"></div>
+    </div>
   </section>
   <section id="view-algos" class="view">
     <div class="algos">
@@ -332,6 +338,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=21"></script>
+<script type="module" src="js/app.js?v=22"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import { NxNCube } from './core/nxn.js';
-import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
+import { parseAlg, formatAlg, formatMove, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=24';
@@ -8,6 +8,7 @@ import { renderStatsView, renderSessionsView, renderAlgosView } from './statsvie
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
+import { ScrambleGuide } from './scramble-guide.js?v=26';
 import { picker } from './picker.js?v=16';
 import { renderNet, renderLL } from './render2d.js?v=7';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
@@ -353,9 +354,9 @@ setDeviceStatus('disconnected');
 /* ---------- Cube connecté (MoYu WeiLong V10 AI) ---------- */
 // L'état du vrai cube est suivi mouvement par mouvement. Dans le Timer : le mélange fait est détecté,
 // le chrono part au premier mouvement (après l'inspection si elle est activée) et s'arrête cube résolu.
-const smart = { conn: null, state: null, phase: 'idle', solveMoves: null, start: 0, battery: null };
+// sinceSolved : mouvements faits depuis la dernière fois que le cube était résolu ; guide : suivi du mélange.
+const smart = { conn: null, state: null, phase: 'idle', solveMoves: null, start: 0, battery: null, sinceSolved: [], guide: null };
 const cube3 = new NxNCube(3);
-const faceletsToState = f => Uint8Array.from(f, c => 'URFDLB'.indexOf(c));
 const sameState = (a, b) => a && b && a.every((v, i) => v === b[i]);
 const scrambleState = () => cube3.applyAlg(cube3.solved(), scramble || '');
 // Dans le Timer, le cube connecté détecte le mélange et enregistre les mouvements du solve.
@@ -388,11 +389,32 @@ function smartHint() {
   return ganTimer ? 'Mélange fait : pose les mains sur le timer' : 'Mélange fait : le chrono part au premier mouvement';
 }
 
-// Nouveau mélange : on attend que le vrai cube y arrive.
+// Nouveau mélange : on attend que le vrai cube y arrive, en le guidant mouvement par mouvement.
 function smartScrambleChanged() {
   if (!smart.conn || smart.phase === 'running') return;
   smart.phase = 'scrambling';
+  smart.guide = scramble ? new ScrambleGuide(cube3, parseAlg(scramble), smart.sinceSolved) : null;
   checkScrambled();
+  renderScramble();
+}
+
+// Mélange affiché : texte simple, ou suivi (fait / en cours / erreur) quand le cube connecté mélange.
+function renderScramble() {
+  const g = smart.guide;
+  if (!g || !smartTimes() || !['scrambling', 'ready'].includes(smart.phase)) {
+    $('#scramble').textContent = scramble;
+    return;
+  }
+  const ready = smart.phase === 'ready';
+  const fix = g.correction;
+  const moves = g.moves.map((m, i) => {
+    const cls = ready || i < g.k ? 'done' : i === g.k ? (fix ? 'cur wrong' : g.partial ? 'cur half' : 'cur') : '';
+    return `<span class="scr-move ${cls}">${esc(formatMove(m))}</span>`;
+  }).join(' ');
+  let note = '';
+  if (fix) note = `<div class="scr-note wrong">Pour revenir : <b>${esc(formatAlg(fix))}</b></div>`;
+  else if (g.partial) note = `<div class="scr-note half">Encore <b>${esc(formatMove(g.dev[0]))}</b> pour finir ${esc(formatMove(g.moves[g.k]))}</div>`;
+  $('#scramble').innerHTML = moves + note;
 }
 
 function checkScrambled() {
@@ -402,7 +424,10 @@ function checkScrambled() {
 }
 
 function onSmartMove(move) {
-  smart.state = cube3.apply(smart.state, parseAlg(move));
+  const parsed = parseAlg(move);
+  smart.state = cube3.apply(smart.state, parsed);
+  smart.sinceSolved = cube3.isSolved(smart.state) ? [] : simplify([...smart.sinceSolved, ...parsed]);
+  if ((smart.phase === 'scrambling' || smart.phase === 'ready') && smart.guide) smart.guide.move(parsed[0]);
   const now = performance.now();
   if (smartTimes() && !cubeDrivesClock()) {
     // Avec le timer GAN : on enregistre les mouvements pendant que le chrono tourne.
@@ -428,6 +453,7 @@ function onSmartMove(move) {
     }
   }
   renderPreview();
+  renderScramble();
 }
 
 $('#cube-btn').onclick = async () => {
@@ -436,7 +462,9 @@ $('#cube-btn').onclick = async () => {
     smart.conn.disconnect();
     smart.conn = null;
     smart.phase = 'idle';
+    smart.guide = null;
     setCubeStatus('disconnected');
+    renderScramble();
     return;
   }
   if (!bluetoothAvailable()) {
@@ -447,8 +475,8 @@ $('#cube-btn').onclick = async () => {
   try {
     smart.conn = await connectMoyu32({
       onEvent(evt) {
-        if (evt.type === 'state') { smart.state = faceletsToState(evt.facelets); checkScrambled(); renderPreview(); }
-        else if (evt.type === 'battery') { smart.battery = evt.level; setCubeStatus('connected'); }
+        // L'état envoyé par le cube n'est pas utilisé : à la connexion, le cube est considéré comme résolu.
+        if (evt.type === 'battery') { smart.battery = evt.level; setCubeStatus('connected'); }
         else if (evt.type === 'move' && smart.state) onSmartMove(evt.move);
       },
       onStatus(status) { if (smart.conn || status === 'connected') setCubeStatus(status); },
@@ -462,9 +490,10 @@ $('#cube-btn').onclick = async () => {
       knownMac: name => data.devices?.[name] || null,
       onMac(name, mac) { (data.devices ||= {})[name] = mac; persist(); },
     });
-    smart.phase = 'scrambling';
+    smart.state = cube3.solved();
+    smart.sinceSolved = [];
     setCubeStatus('connected');
-    checkScrambled();
+    smartScrambleChanged();
   } catch (err) {
     smart.conn = null;
     setCubeStatus('disconnected');
@@ -474,8 +503,8 @@ $('#cube-btn').onclick = async () => {
 // Recaler : le vrai cube est résolu, on repart de l'état résolu.
 $('#smart-sync').onclick = () => {
   smart.state = cube3.solved();
-  if (smart.phase !== 'running') smart.phase = 'scrambling';
-  checkScrambled();
+  smart.sinceSolved = [];
+  smartScrambleChanged();
   renderPreview();
 };
 setCubeStatus('disconnected');

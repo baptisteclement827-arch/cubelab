@@ -3,6 +3,7 @@ import { NxNCube } from '../core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from '../core/notation.js';
 import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
+import { ScrambleGuide } from '../scramble-guide.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -84,6 +85,37 @@ test('Format des temps', () => {
   eq(fmt(12345), '12.34');
   eq(fmt(62005), '1:02.00');
   eq(fmt(12345, { precision: 3 }), '12.345');
+});
+
+// ---------- Suivi du mélange (cube connecté) ----------
+const guide = (scr, start = '') => new ScrambleGuide(c3, parseAlg(scr), parseAlg(start));
+const play = (g, alg) => parseAlg(alg).forEach(m => g.move(m));
+test('Suivi du mélange : mouvements corrects', () => {
+  const g = guide("R U2 F'");
+  play(g, 'R'); eq(g.k, 1, 'après R');
+  play(g, 'U'); ok(g.partial && g.k === 1, 'U2 commencé');
+  play(g, 'U'); eq(g.k, 2, 'U2 fini');
+  play(g, "F'"); ok(g.done, 'mélange fini');
+});
+test('Suivi du mélange : U2 fait en U\' U\'', () => {
+  const g = guide('R U2');
+  play(g, "R U' U'"); ok(g.done, 'U\' U\' accepté pour U2');
+});
+test('Suivi du mélange : erreur et correction', () => {
+  const g = guide("R U F");
+  play(g, 'R L');
+  eq(formatAlg(g.correction), "L'", 'correction');
+  play(g, "L'"); ok(!g.correction && g.k === 1, 'retour sur le mélange');
+  play(g, "U' B"); eq(formatAlg(g.correction), "B' U", 'deux erreurs');
+});
+test('Suivi du mélange : mouvements parallèles dans l\'autre ordre', () => {
+  const g = guide('R L U');
+  play(g, 'L R'); eq(g.k, 2, 'L puis R accepté');
+});
+test('Suivi du mélange : cube pas résolu au départ', () => {
+  const g = guide('R U', "F'");
+  eq(formatAlg(g.correction), 'F', 'il faut d\'abord annuler F\'');
+  play(g, 'F R U'); ok(g.done, 'puis le mélange');
 });
 
 export default results;

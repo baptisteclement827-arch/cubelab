@@ -3,14 +3,17 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg } from './core/notation.js';
 
+// analysis : le drill commence par une phase d'analyse (sinon le chrono part comme dans le Timer).
 export const DRILLS = [
-  { id: 'bldcross', name: 'BLD Cross + X', puzzle: '333' },
+  { id: 'bldcross', name: 'BLD Cross + X', puzzle: '333', analysis: true },
+  { id: 'slow', name: 'Slow solves', puzzle: '333', analysis: false },
 ];
 
 // États : idle -> analysis -> hold -> ready -> running -> done.
 export class DrillTimer {
-  constructor({ settings, onUpdate, onDone }) {
+  constructor({ settings, onUpdate, onDone, analysis = () => true }) {
     this.settings = settings;
+    this.hasAnalysis = analysis;
     this.onUpdate = onUpdate;
     this.onDone = onDone;
     this.state = 'idle';
@@ -42,6 +45,11 @@ export class DrillTimer {
 
   press() {
     if (this.state === 'running') { this.stop(); return; }
+    // Sans phase d'analyse : depuis le repos, on passe directement au maintien.
+    if ((this.state === 'idle' || this.state === 'done') && !this.hasAnalysis()) {
+      this.analysisStart = performance.now();
+      this.state = 'analysis';
+    }
     if (this.state === 'analysis') {
       // Maintien : on se prépare à l'exécution (vert après le délai de maintien).
       this.state = 'hold';
@@ -62,7 +70,7 @@ export class DrillTimer {
       this.loop();
     } else if (this.state === 'hold') {
       clearTimeout(this.holdTimer);
-      this.state = 'analysis';
+      this.state = this.hasAnalysis() ? 'analysis' : 'idle';
       this.emit();
     } else if (this.state === 'ready') {
       this.start();
@@ -71,7 +79,7 @@ export class DrillTimer {
 
   start() {
     const now = performance.now();
-    this.analysisMs = Math.floor(now - this.analysisStart);
+    this.analysisMs = this.hasAnalysis() ? Math.floor(now - this.analysisStart) : 0;
     this.startTime = now;
     this.state = 'running';
     this.loop();
@@ -200,3 +208,54 @@ export const DIFFICULTIES = [
 ];
 // Difficulté d'un essai enregistré (anciennes versions : niveaux c1/c2/c3, ou rien = normale).
 export const difficultyOf = x => x.diff || { c1: 'easy', c2: 'medium', c3: 'hard' }[x.level] || 'any';
+
+// ---------- Slow solves ----------
+export const PACES = [
+  { tps: 0, name: 'Sans' },
+  { tps: 1, name: '1' },
+  { tps: 1.5, name: '1,5' },
+  { tps: 2, name: '2' },
+  { tps: 3, name: '3' },
+];
+// Pause : un écart entre deux mouvements d'au moins 1 s (ou 2 battements si le métronome est plus lent).
+export const pauseThreshold = tps => Math.max(1000, tps ? 2000 / tps : 0);
+
+// Analyse d'un solve au cube connecté : t = instants des mouvements (ms depuis le départ), total = temps du solve.
+export function slowMetrics(t, total, tps = 0) {
+  if (!t?.length) return null;
+  const gaps = t.map((x, i) => x - (i ? t[i - 1] : 0));
+  gaps.push(Math.max(0, total - t.at(-1)));
+  const limit = pauseThreshold(tps);
+  const pauses = gaps.filter(g => g >= limit);
+  return {
+    moves: t.length,
+    tps: t.length / (total / 1000),
+    pauses: pauses.length,
+    longest: Math.max(...gaps),
+    pauseTime: pauses.reduce((a, b) => a + b, 0),
+    gaps,
+    limit,
+  };
+}
+
+// Métronome : un clic court à chaque battement (Web Audio).
+export class Metronome {
+  constructor() { this.ctx = null; this.timer = null; }
+  start(tps) {
+    this.stop();
+    if (!tps) return;
+    this.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const beat = () => {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain(), now = this.ctx.currentTime;
+      o.frequency.value = 1200;
+      g.gain.setValueAtTime(0.25, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      o.connect(g).connect(this.ctx.destination);
+      o.start(now);
+      o.stop(now + 0.06);
+    };
+    beat();
+    this.timer = setInterval(beat, 1000 / tps);
+  }
+  stop() { clearInterval(this.timer); this.timer = null; }
+}

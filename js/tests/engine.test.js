@@ -5,7 +5,7 @@ import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
 import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
-import { whiteCrossLength } from '../drills.js';
+import { whiteCrossLength, slowMetrics } from '../drills.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -167,6 +167,16 @@ test('Longueur de la cross blanche', () => {
   eq(whiteCrossLength(run("F R")), 2, 'F R');
   const lens = Array.from({ length: 40 }, () => whiteCrossLength(run(randomMoveScramble({ length: 25 }))));
   ok(Math.max(...lens) <= 8, `une cross se fait toujours en 8 mouvements au plus (${Math.max(...lens)})`);
+});
+
+test('Slow solves : pauses et TPS', () => {
+  // 4 mouvements à 0.5, 1, 3.5, 4 s ; fin à 4.2 s : une pause de 2.5 s (seuil 1 s).
+  const m = slowMetrics([500, 1000, 3500, 4000], 4200, 0);
+  eq(m.moves, 4, 'mouvements');
+  eq(m.pauses, 1, 'pauses');
+  eq(m.longest, 2500, 'plus longue pause');
+  ok(Math.abs(m.tps - 4 / 4.2) < 1e-9, 'TPS');
+  eq(slowMetrics([500, 1000, 3500, 4000], 4200, 0.5).pauses, 0, 'à 0.5 TPS, le seuil passe à 4 s');
 });
 
 export default results;

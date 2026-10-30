@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=35">
+<link rel="stylesheet" href="css/style.css?v=38">
 </head>
 <body>
 <div class="app">
@@ -239,20 +239,29 @@
     <aside class="side dr-side">
       <div class="card dr-options">
         <div id="dr-drill"></div>
-        <div class="dr-row">
-          <span class="muted">Paires à prévoir</span>
-          <div id="dr-pairs" class="seg" role="tablist" aria-label="Paires à prévoir"></div>
+        <div class="dr-opts" data-drill="bldcross">
+          <div class="dr-row">
+            <span class="muted">Paires à prévoir</span>
+            <div id="dr-pairs" class="seg" role="tablist" aria-label="Paires à prévoir"></div>
+          </div>
+          <div class="dr-row">
+            <span class="muted">Difficulté de la cross</span>
+            <div id="dr-diff" class="seg dr-levels" role="tablist" aria-label="Difficulté de la cross"></div>
+            <span id="dr-diff-title" class="muted dr-level-title"></span>
+          </div>
         </div>
-        <div class="dr-row">
-          <span class="muted">Difficulté de la cross</span>
-          <div id="dr-diff" class="seg dr-levels" role="tablist" aria-label="Difficulté de la cross"></div>
-          <span id="dr-diff-title" class="muted dr-level-title"></span>
+        <div class="dr-opts" data-drill="slow" hidden>
+          <div class="dr-row">
+            <span class="muted">Métronome (mouvements / s)</span>
+            <div id="dr-pace" class="seg dr-levels" role="tablist" aria-label="Métronome"></div>
+            <span class="muted dr-level-title">Tourne au rythme du clic, sans t'arrêter : regarde la suite pendant que tu tournes.</span>
+          </div>
         </div>
       </div>
       <div id="dr-stats" class="card dr-stats"></div>
       <div class="card solves dr-history">
         <table>
-          <thead><tr><th>#</th><th>X</th><th>Analyse</th><th>Exéc.</th><th></th></tr></thead>
+          <thead id="dr-head"></thead>
           <tbody id="dr-body"></tbody>
         </table>
         <p id="dr-empty" class="empty">Aucun essai pour l'instant.</p>
@@ -398,6 +407,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=36"></script>
+<script type="module" src="js/app.js?v=37"></script>
 </body>
 </html>

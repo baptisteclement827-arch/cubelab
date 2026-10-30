@@ -6,7 +6,7 @@ import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
-import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength } from './drills.js?v=36';
+import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome } from './drills.js?v=37';
 import { randomMoveScramble } from './core/scramble.js';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
@@ -443,6 +443,7 @@ function onSmartMove(move) {
   smart.sinceSolved = cube3.isSolved(smart.state) ? [] : simplify([...smart.sinceSolved, ...parsed]);
   if ((smart.phase === 'scrambling' || smart.phase === 'ready') && smart.guide) smart.guide.move(parsed[0]);
   const now = performance.now();
+  drillSmartMove(now);
   if (smartTimes() && !cubeDrivesClock()) {
     // Avec le timer GAN : on enregistre les mouvements pendant que le chrono tourne.
     if (timer.state === 'running') (smart.solveMoves ||= []).push([move, Math.round(now - timer.startTime)]);
@@ -1456,13 +1457,34 @@ let drillId = data.drillId || DRILLS[0].id;
 // Réglages : paires à prévoir (0, 1, 2) et difficulté de la cross (longueur de la cross blanche).
 let drillPairs = data.drillPairs ?? 0;
 let drillDiff = DIFFICULTIES.find(d => d.id === data.drillDiff) || DIFFICULTIES.find(d => d.id === 'any');
+// Slow solves : rythme du métronome (0 = sans) ; instants des mouvements du cube connecté pendant le solve.
+let drillPace = data.drillPace ?? 0;
+let slowMoves = null;
+const metronome = new Metronome();
+const currentDrill = () => DRILLS.find(d => d.id === drillId) || DRILLS[0];
+const isSlow = () => drillId === 'slow';
 let drillScramble = '';
 let drillPending = null; // essai terminé, en attente de « Réussi / Raté »
 const drillList = () => ((data.drills ||= {})[drillId] ||= []);
 const drillPicker = picker($('#dr-drill'), {
   label: 'Drill',
-  onChange(id) { drillId = data.drillId = id; persist(); renderDrills(); },
+  onChange(id) {
+    drillTimer.cancel();
+    drillId = data.drillId = id;
+    drillPending = null;
+    persist();
+    renderDrills();
+    newDrillScramble();
+  },
 });
+const SLOW_HINTS = {
+  idle: 'Maintiens Espace puis relâche pour démarrer',
+  done: 'Maintiens Espace puis relâche pour un nouveau solve',
+  hold: 'Attends le vert…',
+  ready: 'Relâche pour démarrer',
+  running: '',
+};
+const drillHint = state => (isSlow() ? SLOW_HINTS : DRILL_HINTS)[state] ?? '';
 const DRILL_HINTS = {
   idle: 'Espace : lancer l\'analyse',
   done: 'Espace : nouvelle analyse',
@@ -1474,25 +1496,32 @@ const DRILL_HINTS = {
 
 const drillTimer = new DrillTimer({
   settings,
+  analysis: () => currentDrill().analysis,
   onUpdate(v) {
     const el = $('#dr-timer');
     el.className = 'timer';
     const phase = $('#dr-phase');
     if (v.state === 'running') {
       el.textContent = runningText(v.ms);
-      phase.textContent = 'Exécution';
+      phase.textContent = isSlow() ? (drillPace ? `Métronome ${String(drillPace).replace('.', ',')} TPS` : '') : 'Exécution';
+    } else if (isSlow() && v.state !== 'done') {
+      if (v.state === 'hold' || v.state === 'ready') el.classList.add(v.state);
+      if (v.state === 'ready') el.textContent = Stats.fmt(0, { precision: precision() });
+      phase.textContent = '';
     } else if (v.analysis !== undefined && v.state !== 'done') {
       el.textContent = (v.analysis / 1000).toFixed(1);
       el.classList.add(v.state === 'analysis' ? 'inspect' : v.state);
       phase.textContent = 'Analyse';
     } else if (v.state === 'done') {
       el.textContent = Stats.fmt(v.ms, { precision: precision() });
-      phase.textContent = `Analyse ${(v.analysis / 1000).toFixed(1)} s`;
+      phase.textContent = isSlow() ? '' : `Analyse ${(v.analysis / 1000).toFixed(1)} s`;
     }
     document.body.classList.toggle('solving', v.state === 'running');
-    $('#dr-hint').textContent = drillPending && v.state === 'done' ? '' : DRILL_HINTS[v.state] ?? '';
+    $('#dr-hint').textContent = drillPending && v.state === 'done' ? '' : drillHint(v.state);
   },
   onDone({ analysis, exec }) {
+    metronome.stop();
+    if (isSlow()) { saveSlow(exec); newDrillScramble(); return; }
     drillPending = { n: drillPairs, diff: drillDiff.id, s: drillScramble, analysis, exec, d: Date.now() };
     // Cube connecté : vérification automatique (cross d'une couleur quelconque + au moins n paires).
     if (smart.conn && smart.state) {
@@ -1507,6 +1536,52 @@ const drillTimer = new DrillTimer({
 // Tant qu'un essai n'est pas noté, on ne relance pas d'analyse.
 const drillPress = drillTimer.press.bind(drillTimer);
 drillTimer.press = () => { if (!drillPending) drillPress(); };
+// Slow solves : le métronome et l'enregistrement des mouvements démarrent avec le solve.
+const drillStart = drillTimer.start.bind(drillTimer);
+drillTimer.start = () => {
+  drillStart();
+  if (!isSlow()) return;
+  slowMoves = smart.conn ? [] : null;
+  metronome.start(drillPace);
+};
+const drillCancel = drillTimer.cancel.bind(drillTimer);
+drillTimer.cancel = () => { metronome.stop(); drillCancel(); };
+
+// Mouvement du cube connecté pendant un slow solve : instant noté ; cube résolu = fin du solve.
+function drillSmartMove(now) {
+  if (activeTab !== 'drills' || !isSlow() || drillTimer.state !== 'running' || !slowMoves) return;
+  slowMoves.push(Math.round(now - drillTimer.startTime));
+  if (cube3.isSolved(smart.state)) drillTimer.stop(Math.floor(now - drillTimer.startTime));
+}
+
+function saveSlow(exec) {
+  const entry = { s: drillScramble, exec, tps: drillPace, d: Date.now() };
+  if (slowMoves?.length) entry.t = slowMoves;
+  slowMoves = null;
+  drillList().push(entry);
+  persist();
+  const m = slowMetrics(entry.t, exec, drillPace);
+  const r = $('#dr-result');
+  r.hidden = !m;
+  if (m) {
+    r.innerHTML = `<div class="slow-result">
+      <span><b>${m.moves}</b> mouvements · <b>${m.tps.toFixed(2)}</b> TPS · <b class="${m.pauses ? 'no' : 'yes'}">${m.pauses}</b> pause${m.pauses > 1 ? 's' : ''}${m.pauses ? ` (plus longue ${(m.longest / 1000).toFixed(1)} s)` : ''}</span>
+      ${gapsChart(m)}
+    </div>`;
+  }
+  renderDrillStats();
+}
+
+// Écarts entre mouvements, en barres ; les pauses (au-dessus du seuil) en orange.
+function gapsChart(m) {
+  const W = 320, H = 60, max = Math.max(m.limit * 1.5, ...m.gaps);
+  const bw = W / m.gaps.length;
+  const y = v => H - (Math.min(v, max) / max) * H;
+  const bars = m.gaps.map((g, i) => `<rect x="${(i * bw + 0.5).toFixed(1)}" y="${y(g).toFixed(1)}" width="${Math.max(bw - 1, 1).toFixed(1)}" height="${(H - y(g)).toFixed(1)}" class="${g >= m.limit ? 'gap-pause' : 'gap'}"><title>${(g / 1000).toFixed(2)} s</title></rect>`).join('');
+  return `<svg class="gaps" viewBox="0 0 ${W} ${H}" role="img" aria-label="Écarts entre les mouvements, pauses en orange">
+    <line x1="0" x2="${W}" y1="${y(m.limit)}" y2="${y(m.limit)}" class="gap-limit"/>${bars}</svg>
+    <span class="muted gaps-legend">Écart entre chaque mouvement · ligne = seuil de pause (${(m.limit / 1000).toFixed(1)} s)</span>`;
+}
 
 function showDrillResult(auto) {
   const r = $('#dr-result');
@@ -1540,7 +1615,7 @@ let drillScrambleToken = 0;
 async function newDrillScramble() {
   const drill = DRILLS.find(d => d.id === drillId);
   const token = ++drillScrambleToken;
-  const lvl = drillDiff;
+  const lvl = isSlow() ? {} : drillDiff;
   $('#dr-scramble').textContent = 'Génération du mélange…';
   let scr;
   if (lvl.min !== undefined) {
@@ -1563,6 +1638,9 @@ async function newDrillScramble() {
 
 function renderDrills() {
   drillPicker.set(DRILLS, drillId);
+  document.querySelectorAll('.dr-opts').forEach(el => { el.hidden = el.dataset.drill !== drillId; });
+  $('#dr-pace').innerHTML = PACES.map(p => `<button type="button" role="tab" data-pace="${p.tps}"
+    class="${p.tps === drillPace ? 'on' : ''}" aria-selected="${p.tps === drillPace}">${p.name}</button>`).join('');
   $('#dr-pairs').innerHTML = PAIRS.map(p => `<button type="button" role="tab" data-n="${p.n}"
     class="${p.n === drillPairs ? 'on' : ''}" aria-selected="${p.n === drillPairs}">${p.name}</button>`).join('');
   $('#dr-diff').innerHTML = DIFFICULTIES.map(d => `<button type="button" role="tab" data-diff="${d.id}" title="${d.title}"
@@ -1572,12 +1650,15 @@ function renderDrills() {
   if (!drillTimer.busy && drillTimer.state !== 'done') {
     $('#dr-timer').textContent = '0.0';
     $('#dr-phase').textContent = '';
-    $('#dr-hint').textContent = DRILL_HINTS.idle;
+    $('#dr-hint').textContent = drillHint('idle');
+    $('#dr-result').hidden = true;
   }
   renderDrillStats();
 }
 
 function renderDrillStats() {
+  if (isSlow()) { renderSlowStats(); return; }
+  $('#dr-head').innerHTML = '<tr><th>#</th><th>X</th><th>Analyse</th><th>Exéc.</th><th></th></tr>';
   const list = drillList();
   const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
   const sec = ms => (ms == null ? '–' : `${(ms / 1000).toFixed(1)} s`);
@@ -1609,6 +1690,44 @@ function renderDrillStats() {
   $('#dr-empty').hidden = list.length > 0;
 }
 
+// Stats des slow solves : par rythme ; mouvements, TPS et pauses quand le cube connecté a suivi le solve.
+function renderSlowStats() {
+  const list = drillList();
+  const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
+  const paceName = tps => (tps ? `${String(tps).replace('.', ',')} TPS` : 'Sans métronome');
+  const rows = PACES.map(p => {
+    const xs = list.filter(x => (x.tps || 0) === p.tps);
+    if (!xs.length) return null;
+    const ms = xs.map(x => slowMetrics(x.t, x.exec, x.tps)).filter(Boolean);
+    const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    return { p, count: xs.length, time: avg(xs.map(x => x.exec)), tps: ms.length ? avg(ms.map(m => m.tps)) : null, pauses: ms.length ? avg(ms.map(m => m.pauses)) : null };
+  }).filter(Boolean);
+  $('#dr-stats').innerHTML = rows.length ? `<table>
+      <thead><tr><th></th><th>Solves</th><th>Temps</th><th>TPS</th><th>Pauses</th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="${r.p.tps === drillPace ? 'current' : ''}">
+        <td>${paceName(r.p.tps)}</td><td>${r.count}</td><td>${f(r.time)}</td><td>${r.tps == null ? '–' : r.tps.toFixed(2)}</td><td>${r.pauses == null ? '–' : r.pauses.toFixed(1)}</td>
+      </tr>`).join('')}</tbody>
+    </table><p class="muted dr-note">TPS et pauses : solves suivis par le cube connecté.</p>`
+    : '<p class="empty">Les stats apparaîtront après ton premier solve.</p>';
+  $('#dr-head').innerHTML = '<tr><th>#</th><th>Rythme</th><th>Temps</th><th>TPS</th><th>Pauses</th><th></th></tr>';
+  const rowsH = [];
+  for (let i = list.length - 1; i >= Math.max(0, list.length - 100); i--) {
+    const x = list[i], m = slowMetrics(x.t, x.exec, x.tps);
+    rowsH.push(`<tr><td>${i + 1}</td><td>${x.tps ? String(x.tps).replace('.', ',') : '–'}</td><td>${Stats.fmt(x.exec, { precision: precision() })}</td>
+      <td>${m ? m.tps.toFixed(2) : '–'}</td><td>${m ? m.pauses : '–'}</td>
+      <td><button type="button" class="btn ghost dr-del" data-del-drill="${i}" title="Supprimer">×</button></td></tr>`);
+  }
+  $('#dr-body').innerHTML = rowsH.join('');
+  $('#dr-empty').hidden = list.length > 0;
+}
+
+$('#dr-pace').addEventListener('click', e => {
+  const b = e.target.closest('[data-pace]');
+  if (!b || drillTimer.busy) return;
+  drillPace = data.drillPace = Number(b.dataset.pace);
+  persist();
+  renderDrills();
+});
 $('#dr-pairs').addEventListener('click', e => {
   const b = e.target.closest('[data-n]');
   if (!b || drillTimer.busy) return;

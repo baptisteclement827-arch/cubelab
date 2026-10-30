@@ -407,6 +407,7 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .dr-stats tr.current td { font-weight: 700; }
 .dr-note { font-size: 12px; margin-top: 6px; }
 .dr-history td:last-child { white-space: nowrap; }
+.dr-history th, .dr-history td { padding-left: 6px; padding-right: 6px; }
 .dr-history .yes, .dr-result .yes { color: var(--ready); font-weight: 700; }
 .dr-history .no, .dr-result .no { color: var(--danger); font-weight: 700; }
 .dr-fail { color: var(--muted); text-decoration: line-through; }
@@ -415,6 +416,14 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .dr-result { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
 .dr-result[hidden] { display: none; }
 .ok-btn { color: var(--ready); }
+.dr-opts { display: flex; flex-direction: column; gap: 10px; }
+.dr-opts[hidden] { display: none; }
+.slow-result { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.gaps { width: min(320px, 100%); height: auto; display: block; }
+.gaps .gap { fill: var(--series-1); }
+.gaps .gap-pause { fill: var(--series-2); }
+.gaps .gap-limit { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 0; opacity: 0.6; }
+.gaps-legend { font-size: 12px; }
 body.solving .dr-phase { visibility: visible; }
 #view-trainer.empty > :not(#tr-empty), #view-trainer:not(.empty) > #tr-empty { display: none; }
 .tr-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }

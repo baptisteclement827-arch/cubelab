@@ -1,4 +1,7 @@
-// Onglet Stats : chiffres clés, progression (singles + ao5 + ao12), répartition des temps, records.
+// Onglet Stats, trois catégories :
+// - Session : chiffres clés, progression (singles + ao5 + ao12), répartition des temps, records ;
+// - Sessions : comparaison des sessions du cube ;
+// - Algos : entraînement OLL / PLL (états, cas les plus lents).
 // Graphiques en SVG maison, survol avec info-bulle.
 import * as Stats from './stats.js?v=10';
 
@@ -21,12 +24,12 @@ function bestAvgWithIndex(vals, n, mean) {
   return { value: best, index: at };
 }
 
-export function renderStatsView(root, solves, { precision, smart }) {
+export function renderStatsView(root, solves, { precision }) {
   const vals = solves.map(Stats.value);
   const finished = vals.filter(v => v !== Stats.DNF);
   const f = (ms, avg = false) => Stats.fmt(ms, { precision, avg });
   if (!solves.length) {
-    root.innerHTML = `<div class="placeholder"><h2>Pas encore de solves</h2><p>${smart ? 'Fais un solve avec le cube connecté' : 'Fais quelques solves dans le Timer'} pour voir tes stats ici.</p></div>`;
+    root.innerHTML = '<div class="placeholder"><h2>Pas encore de solves</h2><p>Fais quelques solves dans le Timer pour voir les stats de cette session.</p></div>';
     return;
   }
 
@@ -44,8 +47,8 @@ export function renderStatsView(root, solves, { precision, smart }) {
     { label: 'Meilleure ao12', value: f(b12.value, true) },
     { label: 'Moyenne', value: f(mean, true), sub: 'hors DNF' },
   ];
-  if (smart) {
-    // Mouvements et TPS des solves au cube connecté (mouvements enregistrés).
+  {
+    // Mouvements et TPS, pour les solves faits au cube connecté (mouvements enregistrés).
     const withMoves = solves.filter(s => s.mv?.length && s.p !== 'DNF');
     if (withMoves.length) {
       const moves = withMoves.reduce((a, s) => a + s.mv.length, 0) / withMoves.length;
@@ -200,4 +203,90 @@ function drawHistogram(el, { finished, f }) {
     h.addEventListener('pointerdown', show);
     h.addEventListener('pointerleave', () => { tip.hidden = true; });
   });
+}
+
+// ---------- Comparaison des sessions ----------
+export function renderSessionsView(root, sessions, { precision, current }) {
+  const f = (ms, avg = false) => Stats.fmt(ms, { precision, avg });
+  const rows = sessions.map(se => {
+    const vals = se.solves.map(Stats.value);
+    const fin = vals.filter(v => v !== Stats.DNF);
+    return {
+      se,
+      count: vals.length,
+      best: fin.length ? Math.min(...fin) : null,
+      ao5: bestAvgWithIndex(vals, 5).value,
+      ao12: bestAvgWithIndex(vals, 12).value,
+      mean: fin.length ? fin.reduce((a, b) => a + b, 0) / fin.length : null,
+      last: se.solves.at(-1)?.d,
+    };
+  });
+  if (!rows.some(r => r.count)) {
+    root.innerHTML = '<div class="placeholder"><h2>Pas encore de solves</h2><p>Les sessions apparaîtront ici dès leur premier solve.</p></div>';
+    return;
+  }
+  const maxMean = Math.max(...rows.map(r => r.mean || 0));
+  root.innerHTML = `<section class="card chart-card records sessions-table">
+    <div class="chart-head"><h2>Comparaison des sessions</h2><span class="muted">Clique sur une session pour voir son détail</span></div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Session</th><th class="num">Solves</th><th class="num">Meilleur</th><th class="num">ao5</th><th class="num">ao12</th><th>Moyenne</th><th class="hide-m">Dernier solve</th></tr></thead>
+      <tbody>${rows.map(r => `<tr data-session="${r.se.id}" class="${r.se.id === current ? 'current' : ''}">
+        <td>${esc(r.se.name)}</td><td class="num">${r.count}</td><td class="num">${f(r.best)}</td>
+        <td class="num">${f(r.ao5, true)}</td><td class="num">${f(r.ao12, true)}</td>
+        <td class="mean"><span class="inline-bar"><i style="width:${r.mean ? (r.mean / maxMean) * 100 : 0}%"></i></span><span class="num">${f(r.mean, true)}</span></td>
+        <td class="muted hide-m">${r.last ? new Date(r.last).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '–'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </section>`;
+}
+
+// ---------- Algos (entraînement) ----------
+const STATUS = [
+  { id: 'learned', name: 'Appris' },
+  { id: 'learning', name: 'En apprentissage' },
+  { id: 'unknown', name: 'Inconnu' },
+];
+
+export function renderAlgosView(root, sets, { precision, check, image }) {
+  const f = (ms, avg = false) => Stats.fmt(ms, { precision, avg });
+  const field = check === 'on' ? 'timesCheck' : 'times';
+  let html = `<div class="seg sv-check" role="tablist" aria-label="Temps d'entraînement">
+    <button type="button" data-check="off" class="${check === 'on' ? '' : 'on'}">Sans check</button>
+    <button type="button" data-check="on" class="${check === 'on' ? 'on' : ''}">Avec check</button>
+  </div>`;
+  for (const { name, set, progress } of sets) {
+    const statusOf = c => progress[c.id]?.status || 'unknown';
+    const counts = Object.fromEntries(STATUS.map(st => [st.id, set.CASES.filter(c => statusOf(c) === st.id).length]));
+    const total = set.CASES.length;
+    const trained = set.CASES
+      .map(c => ({ c, st: Stats.timeStats(progress[c.id]?.[field]) }))
+      .filter(x => x.st)
+      .sort((a, b) => b.st.mean - a.st.mean); // les plus lents d'abord : ce sont eux à travailler
+    const attempts = trained.reduce((a, x) => a + x.st.count, 0);
+    const avgMean = trained.length ? trained.reduce((a, x) => a + x.st.mean, 0) / trained.length : null;
+    const maxMean = trained.length ? trained[0].st.mean : 0;
+    html += `<section class="card chart-card algo-stats">
+      <div class="chart-head"><h2>${esc(name)}</h2><span class="muted">${counts.learned}/${total} appris</span></div>
+      <div class="status-bar" role="img" aria-label="${STATUS.map(st => `${counts[st.id]} ${st.name.toLowerCase()}`).join(', ')}">
+        ${STATUS.map(st => counts[st.id] ? `<i class="st-${st.id}" style="flex:${counts[st.id]}"></i>` : '').join('')}
+      </div>
+      <div class="legend status-legend">${STATUS.map(st => `<span><i class="key sq st-${st.id}"></i>${st.name} ${counts[st.id]}</span>`).join('')}</div>
+      <div class="kpis small">
+        <div class="kpi"><span class="kpi-label">Cas entraînés</span><strong class="kpi-value">${trained.length}/${total}</strong></div>
+        <div class="kpi"><span class="kpi-label">Essais</span><strong class="kpi-value">${attempts}</strong></div>
+        <div class="kpi"><span class="kpi-label">Moyenne des cas</span><strong class="kpi-value">${f(avgMean, true)}</strong></div>
+      </div>
+      ${trained.length ? `<div class="table-scroll"><table class="algo-table">
+        <thead><tr><th>Cas</th><th class="hide-m">État</th><th class="num">n</th><th>Moyenne</th><th class="num hide-m">Médiane</th><th class="num">Meilleur</th></tr></thead>
+        <tbody>${trained.map(({ c, st }) => `<tr>
+          <td><span class="case-cell">${image(c)}${esc(c.name)}</span></td>
+          <td class="hide-m"><span class="st-dot st-${statusOf(c)}"></span>${STATUS.find(x => x.id === statusOf(c)).name}</td>
+          <td class="num">${st.count}</td>
+          <td class="mean"><span class="inline-bar"><i style="width:${(st.mean / maxMean) * 100}%"></i></span><span class="num">${f(st.mean, true)}</span></td>
+          <td class="num hide-m">${f(st.median, true)}</td><td class="num">${f(st.best)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : `<p class="empty">Pas encore de temps ${check === 'on' ? 'avec' : 'sans'} check pour cet ensemble : lance un entraînement depuis l'onglet Algos.</p>`}
+    </section>`;
+  }
+  root.innerHTML = html;
 }

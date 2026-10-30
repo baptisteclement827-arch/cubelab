@@ -4,7 +4,7 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
 import * as Store from './storage.js?v=6';
 import * as Stats from './stats.js?v=10';
-import { renderStatsView } from './statsview.js?v=22';
+import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=23';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -99,25 +99,14 @@ function resetScrambles() {
 }
 
 /* ---------- Stats et liste ---------- */
-// Stats séparées : solves au timer (clavier ou timer GAN) et solves au cube connecté (smart).
-const solveSource = s => (s.src === 'smart' || s.mv ? 'smart' : 'timer');
-let statsSource = data.statsSource || 'timer';
-
 function renderStats() {
-  document.querySelectorAll('#stats-source [data-source]').forEach(b => {
-    b.classList.toggle('on', b.dataset.source === statsSource);
-    b.setAttribute('aria-selected', b.dataset.source === statsSource);
-  });
-  // index : position dans la session (pour ouvrir / pénaliser le bon solve).
-  const all = session().solves;
-  const index = all.map((_, i) => i).filter(i => solveSource(all[i]) === statsSource);
-  const solves = index.map(i => all[i]);
+  const solves = session().solves;
   const vals = solves.map(Stats.value);
   const sum = Stats.summary(vals);
   const p = precision();
 
   if (!sum.count) {
-    $('#stats').innerHTML = `<p class="empty">${statsSource === 'smart' ? 'Aucun solve au cube connecté pour l\'instant.' : 'Les stats apparaîtront après ton premier solve.'}</p>`;
+    $('#stats').innerHTML = '<p class="empty">Les stats apparaîtront après ton premier solve.</p>';
   } else {
     $('#stats').innerHTML = `
       <table>
@@ -131,7 +120,7 @@ function renderStats() {
   const rows = [];
   for (let i = solves.length - 1; i >= 0; i--) {
     const isBest = vals[i] === best && best !== Stats.DNF;
-    rows.push(`<tr data-i="${index[i]}">
+    rows.push(`<tr data-i="${i}">
       <td>${i + 1}</td>
       <td class="${isBest ? 'best' : ''}">${Stats.fmtSolve(solves[i], p)}${solves[i].c ? ' *' : ''}</td>
       <td>${Stats.fmt(Stats.avgAt(vals, i, 5), { precision: p, avg: true })}</td>
@@ -215,9 +204,6 @@ const timer = new Timer({
       solve.mv = smart.solveMoves; // mouvements du cube connecté : [mouvement, ms depuis le départ]
     }
     smart.solveMoves = null;
-    // On affiche les stats de la source du solve qui vient d'être fait.
-    statsSource = solveSource(solve);
-    data.statsSource = statsSource;
     session().solves.push(solve);
     persist();
     renderStats();
@@ -450,27 +436,53 @@ $('#last-actions').addEventListener('click', e => {
   else setPenalty(i, b.dataset.pen);
 });
 
-// Onglets Timer / Smart : même choix dans le Timer et dans l'onglet Stats.
-for (const sel of ['#stats-source', '#sv-source']) {
-  $(sel).addEventListener('click', e => {
-    const b = e.target.closest('[data-source]');
-    if (!b) return;
-    statsSource = b.dataset.source;
-    data.statsSource = statsSource;
-    persist();
-    renderStats();
-    if (activeTab === 'stats') renderStatsPage();
-  });
-}
+/* ---------- Onglet Stats ---------- */
+// Catégories : la session choisie, la comparaison des sessions, l'entraînement des algos.
+let statsTab = data.statsTab || 'session';
 
 function renderStatsPage() {
-  document.querySelectorAll('#sv-source [data-source]').forEach(b => {
-    b.classList.toggle('on', b.dataset.source === statsSource);
-    b.setAttribute('aria-selected', b.dataset.source === statsSource);
+  document.querySelectorAll('#sv-tabs [data-cat]').forEach(b => {
+    b.classList.toggle('on', b.dataset.cat === statsTab);
+    b.setAttribute('aria-selected', b.dataset.cat === statsTab);
   });
-  const solves = session().solves.filter(s => solveSource(s) === statsSource);
-  renderStatsView($('#stats-view'), solves, { precision: precision(), smart: statsSource === 'smart' });
+  // Les menus Cube / Session ne servent qu'aux catégories liées aux solves.
+  $('.selectors').hidden = statsTab === 'algos';
+  const opts = { precision: precision() };
+  if (statsTab === 'session') {
+    renderStatsView($('#stats-view'), session().solves, opts);
+  } else if (statsTab === 'sessions') {
+    const sessions = data.sessions.filter(x => x.puzzle === puzzleId);
+    renderSessionsView($('#stats-view'), sessions, { ...opts, current: session().id });
+  } else {
+    const sets = Object.entries(ALG_SETS).map(([key, set]) => {
+      const [puzzle, id] = key.split('/');
+      return { key, name: `${PUZZLES[puzzle].name} · ${PUZZLES[puzzle].algSets.find(x => x.id === id)?.name}`, set, progress: data.algs[key] || {} };
+    });
+    renderAlgosView($('#stats-view'), sets, { ...opts, check: data.statsCheck || 'off', image: c => caseImageFor(c) });
+  }
 }
+
+$('#sv-tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  statsTab = b.dataset.cat;
+  data.statsTab = statsTab;
+  persist();
+  renderStatsPage();
+});
+$('#stats-view').addEventListener('click', e => {
+  // Comparaison : un clic sur une session l'ouvre dans la catégorie Session.
+  const row = e.target.closest('[data-session]');
+  if (row) {
+    data.current[puzzleId] = row.dataset.session;
+    statsTab = data.statsTab = 'session';
+    persist();
+    refreshAll();
+    return;
+  }
+  const chk = e.target.closest('[data-check]');
+  if (chk) { data.statsCheck = chk.dataset.check; persist(); renderStatsPage(); }
+});
 // Les graphiques suivent la largeur de la fenêtre.
 let statsWidth = innerWidth;
 addEventListener('resize', () => {
@@ -487,9 +499,7 @@ function openSolve(i) {
   const s = session().solves[i];
   if (!s) return;
   openSolveIndex = i;
-  // Numéro dans la liste affichée (solves de la même source).
-  const n = session().solves.slice(0, i + 1).filter(x => solveSource(x) === solveSource(s)).length;
-  $('#solve-title').textContent = `Solve n°${n}${solveSource(s) === 'smart' ? ' (smart)' : ''} · ${Stats.fmtSolve(s, precision())}`;
+  $('#solve-title').textContent = `Solve n°${i + 1}${s.mv ? ' (cube connecté)' : ''} · ${Stats.fmtSolve(s, precision())}`;
   $('#solve-date').textContent = new Date(s.d).toLocaleString('fr-FR');
   $('#solve-scramble').textContent = s.s;
   $('#solve-comment').value = s.c || '';
@@ -653,6 +663,13 @@ function renderAlgos() {
 
 // Les schémas sont calculés une seule fois par cas.
 const caseImages = new Map();
+const caseImageFor = c => {
+  if (!caseImages.has(c.id)) {
+    const set = Object.values(ALG_SETS).find(x => x.CASES.includes(c));
+    caseImages.set(c.id, renderLL(algCaseState(c.alg), set.view));
+  }
+  return caseImages.get(c.id);
+};
 const caseImage = c => {
   if (!caseImages.has(c.id)) caseImages.set(c.id, renderLL(algCaseState(c.alg), currentSet().view));
   return caseImages.get(c.id);

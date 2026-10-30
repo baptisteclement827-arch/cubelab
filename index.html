@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
 <div class="app">
@@ -60,10 +60,6 @@
 <main>
   <section id="view-timer" class="view active">
     <aside class="side">
-      <div id="stats-source" class="seg" role="tablist" aria-label="Source des solves">
-        <button type="button" role="tab" data-source="timer">Timer</button>
-        <button type="button" role="tab" data-source="smart">Smart</button>
-      </div>
       <div id="stats" class="card stats"></div>
       <div class="card solves">
         <table>
@@ -187,9 +183,10 @@
 
   <section id="view-stats" class="view">
     <div class="stats-page">
-      <div id="sv-source" class="seg sv-source" role="tablist" aria-label="Source des solves">
-        <button type="button" role="tab" data-source="timer">Timer</button>
-        <button type="button" role="tab" data-source="smart">Smart</button>
+      <div id="sv-tabs" class="seg sv-tabs" role="tablist" aria-label="Catégorie de stats">
+        <button type="button" role="tab" data-cat="session">Session</button>
+        <button type="button" role="tab" data-cat="sessions">Sessions</button>
+        <button type="button" role="tab" data-cat="algos">Algos</button>
       </div>
       <div id="stats-view"></div>
     </div>
@@ -338,6 +335,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=22"></script>
+<script type="module" src="js/app.js?v=23"></script>
 </body>
 </html>

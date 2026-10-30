@@ -44,7 +44,7 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/devices/moyu32.js` + `aes128.js` : cube MoYu WeiLong V10 AI en Bluetooth (protocole MoYu32 d'après csTimer)
 - `js/scramble-guide.js` : suivi du mélange mouvement par mouvement au cube connecté (étape atteinte, correction)
 - `js/splits.js` : découpage CFOP (croix, F2L, OLL, PLL) des solves au cube connecté
-- `js/drills.js` : onglet Drills (BLD Croix + X : chrono d'analyse puis d'exécution, stats)
+- `js/drills.js` : onglet Drills (BLD Cross + X : chrono d'analyse puis d'exécution, stats)
 - `js/statsview.js` : onglet Stats (chiffres clés, progression, répartition, records), graphiques SVG maison
 - `js/picker.js` : menu déroulant maison (sélecteurs de l'onglet Algos)
 - `js/app.js` : interface

@@ -6,7 +6,7 @@ import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
-import { DRILLS, DrillTimer, drillStats } from './drills.js?v=33';
+import { DRILLS, DrillTimer, drillStats } from './drills.js?v=34';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -1449,8 +1449,8 @@ $('#tr-edit').onclick = () => {
 renderAlgos();
 
 /* ---------- Drills ---------- */
-// BLD Croix + X : analyse sans limite, puis exécution (à l'aveugle) chronométrée. Avec le cube connecté,
-// la réussite est vérifiée (croix + paires en place) ; sinon on la note soi-même.
+// BLD Cross + X : analyse sans limite, puis exécution (à l'aveugle) chronométrée. Avec le cube connecté,
+// la réussite est vérifiée (cross + paires en place) ; sinon on la note soi-même.
 let drillId = data.drillId || DRILLS[0].id;
 let drillPairs = data.drillPairs ?? 0;
 let drillScramble = '';
@@ -1463,7 +1463,7 @@ const drillPicker = picker($('#dr-drill'), {
 const DRILL_HINTS = {
   idle: 'Espace : lancer l\'analyse',
   done: 'Espace : nouvelle analyse',
-  analysis: 'Prévois la croix et les paires · maintiens Espace puis relâche pour exécuter',
+  analysis: 'Prévois la cross et les paires · maintiens Espace puis relâche pour exécuter',
   hold: 'Attends le vert…',
   ready: 'Relâche pour lancer l\'exécution',
   running: '',
@@ -1491,7 +1491,7 @@ const drillTimer = new DrillTimer({
   },
   onDone({ analysis, exec }) {
     drillPending = { n: drillPairs, s: drillScramble, analysis, exec, d: Date.now() };
-    // Cube connecté : vérification automatique (croix d'une couleur quelconque + au moins n paires).
+    // Cube connecté : vérification automatique (cross d'une couleur quelconque + au moins n paires).
     if (smart.conn && smart.state) {
       const r = crossAndPairs(smart.state);
       saveDrill(r.cross && r.pairs >= drillPairs, true, r);
@@ -1510,12 +1510,12 @@ function showDrillResult(auto) {
   r.hidden = false;
   if (drillPending) {
     $('#dr-hint').textContent = '';
-    r.innerHTML = `<span>Croix${drillPending.n ? ` + ${drillPending.n} paire${drillPending.n > 1 ? 's' : ''}` : ''} réussie ?</span>
+    r.innerHTML = `<span>Cross${drillPending.n ? ` + ${drillPending.n} paire${drillPending.n > 1 ? 's' : ''}` : ''} réussie ?</span>
       <button type="button" class="btn ok-btn" data-drill-ok="1">Réussi</button>
       <button type="button" class="btn danger" data-drill-ok="0">Raté</button>`;
   } else if (auto) {
     const last = drillList().at(-1);
-    const what = auto.cross ? `croix + ${auto.pairs} paire${auto.pairs > 1 ? 's' : ''} en place` : 'pas de croix en place';
+    const what = auto.cross ? `cross + ${auto.pairs} paire${auto.pairs > 1 ? 's' : ''} en place` : 'pas de cross en place';
     r.innerHTML = `<span class="${last.ok ? 'yes' : 'no'}">${last.ok ? '✓ Réussi' : '✗ Raté'}</span><span class="muted">(${what}, vérifié par le cube)</span>`;
   }
 }
@@ -1561,7 +1561,7 @@ function renderDrillStats() {
   $('#dr-stats').innerHTML = rows.length ? `<table>
       <thead><tr><th></th><th>Essais</th><th>Réussite</th><th>Analyse</th><th>Exéc.</th></tr></thead>
       <tbody>${rows.map(({ n, st }) => `<tr class="${n === drillPairs ? 'current' : ''}">
-        <td>${n ? `+${n}` : 'Croix'}</td><td>${st.count}</td><td>${Math.round(st.success * 100)} %</td><td>${sec(st.analysis)}</td><td>${f(st.exec)}</td>
+        <td>${n ? `+${n}` : 'Cross'}</td><td>${st.count}</td><td>${Math.round(st.success * 100)} %</td><td>${sec(st.analysis)}</td><td>${f(st.exec)}</td>
       </tr>`).join('')}</tbody>
     </table><p class="muted dr-note">Moyennes sur les essais réussis.</p>`
     : '<p class="empty">Les stats apparaîtront après ton premier essai.</p>';

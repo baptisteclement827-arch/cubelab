@@ -1,7 +1,7 @@
-// Drills : exercices ciblés. BLD Croix + X : une phase d'analyse (sans limite), puis l'exécution chronométrée.
+// Drills : exercices ciblés. BLD Cross + X : une phase d'analyse (sans limite), puis l'exécution chronométrée.
 // Chrono : Espace (appui court) lance l'analyse ; maintenir puis relâcher lance l'exécution ; Espace l'arrête.
 export const DRILLS = [
-  { id: 'bldcross', name: 'BLD Croix + X', puzzle: '333' },
+  { id: 'bldcross', name: 'BLD Cross + X', puzzle: '333' },
 ];
 
 // États : idle -> analysis -> hold -> ready -> running -> done.

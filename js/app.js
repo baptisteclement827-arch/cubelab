@@ -11,7 +11,7 @@ import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/ga
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
 import { ScrambleGuide } from './scramble-guide.js?v=26';
 import { picker } from './picker.js?v=16';
-import { renderNet, renderLL, renderF2L } from './render2d.js?v=29';
+import { renderNet, renderLL, renderF2L } from './render2d.js?v=30';
 import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L } from './algsets/index.js?v=28';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';

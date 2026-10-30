@@ -1,5 +1,5 @@
 // Rendu 2D du patron d'un cube NxN en SVG.
-import { FACES } from './core/nxn.js';
+import { FACES, NxNCube } from './core/nxn.js';
 
 // Schéma de couleurs WCA, dans l'ordre U R F D L B (+ gris pour les facettes ignorées).
 export const COLORS = ['#ffffff', '#d7191c', '#14a44d', '#ffd500', '#ff7f0e', '#1f5fd6', '#6b7280'];
@@ -98,33 +98,41 @@ export function renderLL(state, view = 'oll') {
   return `<svg class="ll" viewBox="${-m} ${-m} ${3 + 2 * m} ${3 + 2 * m}" role="img" aria-label="Vue de dessus de la dernière couche">${out}</svg>`;
 }
 
-// Schéma F2L, même style que l'OLL/PLL : vue de dessus avec les bandes latérales, prolongée par les deux
-// rangées du bas de la face avant (en dessous) et de la face droite (à droite), là où se trouve le slot FR.
-// Couleurs jaune dessus, blanc dessous, vert devant ; 6 = pièce sans importance (gris foncé).
+// Schéma F2L en cube 3D (dessus, avant, droite), dans le style des autres schémas : facettes arrondies et espacées,
+// pièces sans importance en gris foncé. Couleurs jaune dessus, blanc dessous, vert devant ; 6 = gris.
 const F2L_COLORS = [TOP, '#ff7f0e', '#14a44d', '#ffffff', '#d7191c', '#1f5fd6', OFF];
+const cube3d = new NxNCube(3);
+const iso = ([x, y, z]) => [(x - z) * 0.866, (x + z) * 0.5 - y];
+
+// Quadrilatère aux coins arrondis (r : part de chaque côté utilisée pour l'arrondi).
+function roundedQuad(pts, r = 0.18) {
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const f = p => `${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+  let d = '';
+  pts.forEach((p, i) => {
+    const prev = pts[(i + 3) % 4], next = pts[(i + 1) % 4];
+    const a = lerp(p, prev, r), b = lerp(p, next, r);
+    d += `${i ? 'L' : 'M'}${f(a)}Q${f(p)} ${f(b)}`;
+  });
+  return `${d}Z`;
+}
 
 export function renderF2L(state) {
-  const color = i => F2L_COLORS[state[i]] ?? OFF;
-  // Contour discret sur les facettes blanches, sinon invisibles sur fond clair.
-  const cell = (x, y, w, h, i) => `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w}" height="${h}" rx="0.1" fill="${color(i)}"${state[i] === 3 ? ' class="white-sticker"' : ''}/>`;
-  const s = 0.94, t = 0.3, g = 0.08;
+  // Faces : dessus (U), avant (F, un peu plus sombre), droite (R, plus sombre) pour donner du relief.
+  const faces = [[0, 1], [2, 0.88], [1, 0.76]];
   let out = '';
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out += cell(c + 0.03, r + 0.03, s, s, r * 3 + c);
-  for (let k = 0; k < 3; k++) {
-    out += cell(2 - k + 0.03, -g - t, s, t, 45 + k); // B : bande du haut
-    out += cell(-g - t, k + 0.03, t, s, 36 + k);     // L : bande du haut
-    out += cell(k + 0.03, 3 + g, s, t, 18 + k);      // F : rangée du haut (bande)
-    out += cell(3 + g, 2 - k + 0.03, t, s, 9 + k);   // R : rangée du haut (bande)
-  }
-  // Rangées du milieu et du bas : F en dessous, R à droite (dépliées).
-  const y0 = 3 + g + t + g, x0 = 3 + g + t + g;
-  for (let r = 1; r < 3; r++) {
-    for (let k = 0; k < 3; k++) {
-      out += cell(k + 0.03, y0 + (r - 1) + 0.03, s, s, 18 + r * 3 + k);
-      out += cell(x0 + (r - 1) + 0.03, 2 - k + 0.03, s, s, 9 + r * 3 + k);
+  for (const [f, light] of faces) {
+    let g = '';
+    for (let k = 0; k < 9; k++) {
+      const i = f * 9 + k;
+      const p = cube3d.points[i];
+      const axis = p.findIndex(v => Math.abs(v) === 3);
+      const [a, b] = [0, 1, 2].filter(d => d !== axis);
+      const corner = (da, db) => { const q = p.slice(); q[a] += da * 0.86; q[b] += db * 0.86; return iso(q); };
+      const d = roundedQuad([corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]);
+      g += `<path d="${d}" fill="${F2L_COLORS[state[i]] ?? OFF}"${state[i] === 3 ? ' class="white-sticker"' : ''}/>`;
     }
+    out += `<g style="filter:brightness(${light})">${g}</g>`;
   }
-  const m = t + 0.12;
-  const w = x0 + 2 + 0.1 + m, h = y0 + 2 + 0.1 + m;
-  return `<svg class="ll f2l" viewBox="${-m} ${-m} ${w} ${h}" role="img" aria-label="Schéma du cas F2L">${out}</svg>`;
+  return `<svg class="ll f2l" viewBox="-5.4 -6.2 10.8 12.4" role="img" aria-label="Schéma du cas F2L">${out}</svg>`;
 }

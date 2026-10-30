@@ -8,7 +8,7 @@ export const DRILLS = [
   { id: 'bldcross', name: 'BLD Cross + X', puzzle: '333', analysis: true },
   { id: 'slow', name: 'Slow solves', puzzle: '333', analysis: false },
   // loop : regard puis tour à l'aveugle, en boucle jusqu'à ce que le cube soit résolu.
-  { id: 'xsolve', name: 'X solves (lookahead)', puzzle: '333', analysis: true, loop: true },
+  { id: 'xsolve', name: 'X solves', puzzle: '333', analysis: true, loop: true },
 ];
 
 // États : idle -> analysis -> hold -> ready -> running -> done.

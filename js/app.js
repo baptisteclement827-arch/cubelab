@@ -6,7 +6,7 @@ import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
-import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome, xsolveSummary } from './drills.js?v=39';
+import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome, xsolveSummary } from './drills.js?v=40';
 import { randomMoveScramble } from './core/scramble.js';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';

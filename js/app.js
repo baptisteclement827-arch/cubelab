@@ -2,7 +2,7 @@ import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
 import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
-import * as Store from './storage.js?v=6';
+import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=23';
 import { Timer } from './timer.js?v=17';
@@ -30,18 +30,53 @@ const settings = () => data.settings;
 const precision = () => Number(settings().precision);
 const persist = () => Store.save(data);
 
+// Sessions par défaut : trois sessions principales (comptées dans les stats), une par façon de chronométrer,
+// et Casual (hors stats). Depuis une session principale, chaque solve va dans la Main de sa source.
+const MAIN_SESSIONS = [
+  { role: 'keyboard', name: 'Main Keyboard' },
+  { role: 'timer', name: 'Main Timer' },
+  { role: 'smart', name: 'Main Smartcube' },
+];
+const isMain = s => MAIN_SESSIONS.some(m => m.role === s?.role);
+const inStats = s => s.stats !== false;
+
+function ensureDefaultSessions(puzzle) {
+  let changed = false;
+  const mains = MAIN_SESSIONS.map(m => {
+    let s = data.sessions.find(x => x.puzzle === puzzle && x.role === m.role);
+    if (!s) { s = Store.newSession(puzzle, m.name, { role: m.role }); changed = true; }
+    return s;
+  });
+  if (changed) {
+    // Les Main en tête de liste, dans l'ordre Keyboard, Timer, Smartcube.
+    data.sessions = [...mains, ...data.sessions.filter(x => !mains.includes(x))];
+    if (!data.sessions.some(x => x.puzzle === puzzle && x.role === 'casual')) {
+      data.sessions.splice(data.sessions.indexOf(mains[2]) + 1, 0, Store.newSession(puzzle, 'Casual', { role: 'casual', stats: false }));
+    }
+    // À la création des Main, on se place sur Main Keyboard pour que le tri des solves s'applique.
+    data.current[puzzle] = mains[0].id;
+    persist();
+  }
+}
+
+const mainSession = (puzzle, role) => data.sessions.find(x => x.puzzle === puzzle && x.role === role);
+
 function session() {
+  ensureDefaultSessions(puzzleId);
   let s = data.sessions.find(x => x.id === data.current[puzzleId] && x.puzzle === puzzleId);
   if (!s) {
-    s = data.sessions.find(x => x.puzzle === puzzleId);
-    if (!s) {
-      s = Store.newSession(puzzleId, 'Session 1');
-      data.sessions.push(s);
-    }
+    s = mainSession(puzzleId, 'keyboard');
     data.current[puzzleId] = s.id;
     persist();
   }
   return s;
+}
+
+// Session affichée dans l'onglet Stats : choisie parmi les sessions comptées dans les stats.
+function statsSession() {
+  const list = data.sessions.filter(x => x.puzzle === puzzleId && inStats(x));
+  const cur = session();
+  return list.find(x => x.id === data.statsSession?.[puzzleId]) || (inStats(cur) ? cur : list[0]);
 }
 
 /* ---------- Sélecteurs ---------- */
@@ -59,7 +94,9 @@ const timerPuzzlePicker = picker($('#puzzle'), {
 const sessionPicker = picker($('#session'), {
   label: 'Session',
   onChange(id) {
-    data.current[puzzleId] = id;
+    // Dans l'onglet Stats, le choix ne change que la session affichée ; ailleurs, la session en cours.
+    if (activeTab === 'stats') (data.statsSession ||= {})[puzzleId] = id;
+    else data.current[puzzleId] = id;
     persist();
     refreshAll();
   },
@@ -67,10 +104,11 @@ const sessionPicker = picker($('#session'), {
 
 function renderSelectors() {
   timerPuzzlePicker.set(Object.values(PUZZLES).filter(p => p.available), puzzleId);
-  const current = session();
+  const forStats = activeTab === 'stats';
+  const current = forStats ? statsSession() : session();
   sessionPicker.set(data.sessions
-    .filter(s => s.puzzle === puzzleId)
-    .map(s => ({ id: s.id, name: `${s.name} (${s.solves.length})` })), current.id);
+    .filter(s => s.puzzle === puzzleId && (!forStats || inStats(s)))
+    .map(s => ({ id: s.id, name: `${s.name} (${s.solves.length})` })), current?.id);
 }
 
 /* ---------- Mélange ---------- */
@@ -199,12 +237,19 @@ const timer = new Timer({
   },
   onSolve({ ms, penalty }) {
     const solve = { t: ms, p: penalty, s: scramble, d: Date.now() };
+    // Source du solve : cube connecté, timer GAN, ou clavier (barre d'espace / appui).
+    const source = smart.solveMoves?.length ? 'smart' : solveInput === 'timer' ? 'timer' : 'keyboard';
+    solveInput = 'keyboard';
     if (smart.solveMoves?.length) {
       solve.src = 'smart';
       solve.mv = smart.solveMoves; // mouvements du cube connecté : [mouvement, ms depuis le départ]
     }
     smart.solveMoves = null;
-    session().solves.push(solve);
+    // Depuis une session Main, le solve va dans la Main de sa source (et on l'affiche) ;
+    // depuis Casual ou une autre session secondaire, il reste dans la session en cours.
+    const target = isMain(session()) ? mainSession(puzzleId, source) : session();
+    target.solves.push(solve);
+    data.current[puzzleId] = target.id;
     persist();
     renderStats();
     showLastTime();
@@ -247,6 +292,7 @@ document.addEventListener('pointerdown', e => {
 });
 
 /* ---------- Timer Bluetooth (GAN Smart Timer) ---------- */
+let solveInput = 'keyboard'; // qui a lancé le chrono en cours : 'keyboard' ou 'timer' (le cube est repéré à part)
 // Les événements du tapis pilotent le chrono de l'onglet affiché (Timer ou Trainer).
 let ganTimer = null;
 const GAN_EVENTS = {
@@ -286,6 +332,7 @@ $('#device-btn').onclick = async () => {
     ganTimer = await connectGanTimer({
       onEvent(evt) {
         const kind = GAN_EVENTS[evt.state];
+        if (kind === 'start') solveInput = 'timer';
         const t = activeTimer();
         if (kind && t) t.device({ kind, ms: evt.ms });
       },
@@ -449,10 +496,10 @@ function renderStatsPage() {
   $('.selectors').hidden = statsTab === 'algos';
   const opts = { precision: precision() };
   if (statsTab === 'session') {
-    renderStatsView($('#stats-view'), session().solves, opts);
+    renderStatsView($('#stats-view'), statsSession()?.solves || [], opts);
   } else if (statsTab === 'sessions') {
-    const sessions = data.sessions.filter(x => x.puzzle === puzzleId);
-    renderSessionsView($('#stats-view'), sessions, { ...opts, current: session().id });
+    const sessions = data.sessions.filter(x => x.puzzle === puzzleId && inStats(x));
+    renderSessionsView($('#stats-view'), sessions, { ...opts, current: statsSession()?.id });
   } else {
     const sets = Object.entries(ALG_SETS).map(([key, set]) => {
       const [puzzle, id] = key.split('/');
@@ -474,7 +521,7 @@ $('#stats-view').addEventListener('click', e => {
   // Comparaison : un clic sur une session l'ouvre dans la catégorie Session.
   const row = e.target.closest('[data-session]');
   if (row) {
-    data.current[puzzleId] = row.dataset.session;
+    (data.statsSession ||= {})[puzzleId] = row.dataset.session;
     statsTab = data.statsTab = 'session';
     persist();
     refreshAll();
@@ -558,26 +605,41 @@ form.addEventListener('change', () => {
   if (scrambleChanged) resetScrambles();
 });
 
-$('#session-new').onclick = () => {
-  const count = data.sessions.filter(s => s.puzzle === puzzleId).length;
-  const name = prompt('Nom de la nouvelle session', `Session ${count + 1}`);
-  if (!name) return;
-  const s = Store.newSession(puzzleId, name.trim());
-  data.sessions.push(s);
-  data.current[puzzleId] = s.id;
+// Création / modification d'une session : nom et présence dans l'onglet Stats.
+let editedSession = null;
+function openSessionDialog(s) {
+  editedSession = s;
+  const f = $('#session-dialog form');
+  $('#session-dialog-title').textContent = s ? 'Modifier la session' : 'Nouvelle session';
+  f.name.value = s ? s.name : `Session ${data.sessions.filter(x => x.puzzle === puzzleId).length + 1}`;
+  f.stats.checked = s ? inStats(s) : true;
+  // Les sessions Main sont toujours dans les stats.
+  f.stats.disabled = isMain(s);
+  $('#session-main-note').hidden = !isMain(s);
+  $('#session-dialog').showModal();
+  f.name.select();
+}
+$('#session-dialog form').addEventListener('submit', e => {
+  if (e.submitter?.value !== 'save') return;
+  const f = e.target;
+  const name = f.name.value.trim();
+  if (!name) { e.preventDefault(); return; }
+  if (editedSession) {
+    editedSession.name = name;
+    if (!isMain(editedSession)) editedSession.stats = f.stats.checked;
+  } else {
+    const s = Store.newSession(puzzleId, name, f.stats.checked ? {} : { stats: false });
+    data.sessions.push(s);
+    data.current[puzzleId] = s.id;
+  }
   persist();
   refreshAll();
-};
-$('#session-rename').onclick = () => {
-  const s = session();
-  const name = prompt('Nouveau nom', s.name);
-  if (!name) return;
-  s.name = name.trim();
-  persist();
-  renderSelectors();
-};
+});
+$('#session-new').onclick = () => openSessionDialog(null);
+$('#session-rename').onclick = () => openSessionDialog(session());
 $('#session-delete').onclick = () => {
   const s = session();
+  if (isMain(s)) { alert(`« ${s.name} » est une session principale : elle ne peut pas être supprimée.`); return; }
   if (!confirm(`Supprimer « ${s.name} » et ses ${s.solves.length} solves ?`)) return;
   data.sessions = data.sessions.filter(x => x.id !== s.id);
   delete data.current[puzzleId];
@@ -625,6 +687,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${activeTab}`));
     $('#page-title').textContent = tab.dataset.title;
     $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
+    renderSelectors(); // la liste des sessions diffère dans l'onglet Stats
     $('#device-btn').hidden = !['timer', 'trainer'].includes(activeTab);
     $('#cube-btn').hidden = !['timer', 'trainer'].includes(activeTab);
     if (activeTab === 'lab') renderLab();

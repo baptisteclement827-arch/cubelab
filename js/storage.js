@@ -12,8 +12,10 @@ export const DEFAULT_SETTINGS = {
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
-export function newSession(puzzle, name) {
-  return { id: uid(), name, puzzle, solves: [] };
+// role : 'keyboard' | 'timer' | 'smart' pour les sessions principales (Main), 'casual' pour Casual, absent sinon.
+// stats : false pour une session qui n'apparaît pas dans l'onglet Stats.
+export function newSession(puzzle, name, extra = {}) {
+  return { id: uid(), name, puzzle, solves: [], ...extra };
 }
 
 function normalize(data) {

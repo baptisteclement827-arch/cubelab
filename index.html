@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=23">
+<link rel="stylesheet" href="css/style.css?v=24">
 </head>
 <body>
 <div class="app">
@@ -303,7 +303,7 @@
       <legend>Session</legend>
       <div class="row-btns">
         <button type="button" class="btn" id="session-new">Nouvelle</button>
-        <button type="button" class="btn" id="session-rename">Renommer</button>
+        <button type="button" class="btn" id="session-rename">Modifier</button>
         <button type="button" class="btn danger" id="session-delete">Supprimer</button>
       </div>
     </fieldset>
@@ -316,6 +316,19 @@
       </div>
     </fieldset>
     <div class="dialog-actions"><button class="btn primary" value="close">Fermer</button></div>
+  </form>
+</dialog>
+
+<dialog id="session-dialog">
+  <form method="dialog" class="dialog-body">
+    <h2 id="session-dialog-title">Nouvelle session</h2>
+    <label class="stack">Nom<input type="text" name="name" maxlength="40" autocomplete="off"></label>
+    <label class="row"><input type="checkbox" name="stats"> Afficher ses stats dans l'onglet Stats</label>
+    <p id="session-main-note" class="muted" hidden>Session principale : toujours comptée dans les stats.</p>
+    <div class="dialog-actions row-btns">
+      <button class="btn" value="cancel" formnovalidate>Annuler</button>
+      <button class="btn primary" value="save">Enregistrer</button>
+    </div>
   </form>
 </dialog>
 
@@ -335,6 +348,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=23"></script>
+<script type="module" src="js/app.js?v=24"></script>
 </body>
 </html>

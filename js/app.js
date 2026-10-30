@@ -8,6 +8,7 @@ import { renderStatsView, renderSessionsView, renderAlgosView } from './statsvie
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
 import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome, xsolveSummary } from './drills.js?v=40';
 import { randomMoveScramble } from './core/scramble.js';
+import * as Goals from './goals.js?v=41';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -751,6 +752,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     if (activeTab === 'gen') renderGenCase();
     if (activeTab === 'trainer') renderTrainer();
     if (activeTab === 'drills') renderDrills();
+    if (activeTab === 'goals') renderGoals();
     if (activeTab === 'stats') renderStatsPage();
   };
 });
@@ -1850,6 +1852,238 @@ $('#dr-body').addEventListener('click', e => {
 const drZone = $('#dr-zone');
 drZone.addEventListener('pointerdown', e => { if (isTouch(e) && !e.target.closest('button')) { e.preventDefault(); drillTimer.pointerDown(); } });
 drZone.addEventListener('pointerup', e => { if (isTouch(e) && !e.target.closest('button')) drillTimer.pointerUp(); });
+
+/* ---------- Objectifs ---------- */
+// Objectifs à long terme (suivis automatiquement quand ils portent sur une stat) et calendrier de séances.
+const setName = key => { const [pz, id] = key.split('/'); return PUZZLES[pz]?.algSets?.find(x => x.id === id)?.name || key; };
+const goalCtx = () => ({ ALG_SETS, sessions: data.sessions, setName });
+const goalForm = $('#goal-form');
+let goalDraft = null; // mesure en cours de création
+
+const metricPicker = picker($('#goal-metric'), {
+  label: 'Mesure',
+  onChange(kind) { goalDraft.kind = kind; renderGoalForm(); },
+});
+const goalSessionPicker = picker($('#goal-session'), {
+  label: 'Session',
+  onChange(id) { goalDraft.session = id; },
+});
+const chipRow = (el, items, value, key) => {
+  el.innerHTML = items.map(([v, label]) => `<label class="chip"><input type="radio" name="goal-${key}" value="${v}" ${String(v) === String(value) ? 'checked' : ''}><span>${label}</span></label>`).join('');
+};
+
+function renderGoalForm() {
+  const m = Goals.METRICS.find(x => x.kind === goalDraft.kind);
+  metricPicker.set(Goals.METRICS.map(x => ({ id: x.kind, name: x.name })), goalDraft.kind);
+  const sessions = data.sessions.filter(x => x.puzzle === puzzleId && inStats(x));
+  goalDraft.session ||= sessions[0]?.id;
+  goalSessionPicker.set(sessions.map(x => ({ id: x.id, name: x.name })), goalDraft.session);
+  chipRow($('#goal-n'), Goals.AVG_SIZES.map(n => [n, `ao${n}`]), goalDraft.n, 'n');
+  chipRow($('#goal-phase'), Object.entries(Goals.PHASE_NAMES), goalDraft.phase, 'phase');
+  chipRow($('#goal-set'), Object.keys(ALG_SETS).map(k => [k, setName(k)]), goalDraft.set, 'set');
+  chipRow($('#goal-pairs'), [[0, 'Cross'], [1, '+1'], [2, '+2']], goalDraft.pairs, 'pairs');
+  goalForm.querySelectorAll('[data-need]').forEach(el => { el.hidden = !m.needs.includes(el.dataset.need); });
+  const t = goalForm.elements.target;
+  t.placeholder = { learned: 'ex. 57', drill: 'ex. 90 (%)', manual: 'ex. 100' }[goalDraft.kind] || 'ex. 9.99 (secondes)';
+  goalForm.elements.title.placeholder = Goals.defaultTitle(metricOf(goalDraft), goalCtx());
+}
+const metricOf = d => {
+  const m = { kind: d.kind };
+  const needs = Goals.METRICS.find(x => x.kind === d.kind).needs;
+  for (const k of needs) m[k] = ['n', 'pairs'].includes(k) ? Number(d[k]) : d[k];
+  return m;
+};
+goalForm.addEventListener('change', e => {
+  const r = e.target.closest('input[type="radio"]');
+  if (r) { goalDraft[r.name.replace('goal-', '')] = r.value; goalForm.elements.title.placeholder = Goals.defaultTitle(metricOf(goalDraft), goalCtx()); }
+});
+$('#goal-add-btn').onclick = () => {
+  goalDraft = { kind: 'avg', n: 12, phase: 'f2l', set: '333/oll', pairs: 1 };
+  goalForm.reset();
+  const d = new Date(); d.setMonth(d.getMonth() + 3);
+  goalForm.elements.deadline.value = Goals.dayKey(d);
+  goalForm.hidden = false;
+  $('#goal-error').hidden = true;
+  renderGoalForm();
+};
+$('#goal-cancel').onclick = () => { goalForm.hidden = true; };
+
+// « 9.99 », « 1:02.5 » -> millisecondes ; nombres simples pour les autres mesures.
+function parseTarget(kind, text) {
+  const t = text.trim().replace(',', '.');
+  if (['learned', 'drill', 'manual'].includes(kind)) { const v = Number(t); return Number.isFinite(v) ? v : null; }
+  const m = /^(?:(\d+):)?(\d+(?:\.\d+)?)$/.exec(t);
+  return m ? Math.round(((Number(m[1]) || 0) * 60 + Number(m[2])) * 1000) : null;
+}
+
+goalForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const metric = metricOf(goalDraft);
+  const target = parseTarget(metric.kind, goalForm.elements.target.value);
+  const err = $('#goal-error');
+  if (target === null) { err.textContent = 'Cible invalide (ex. 9.99 pour un temps).'; err.hidden = false; return; }
+  const goal = {
+    id: Math.random().toString(36).slice(2, 10),
+    title: goalForm.elements.title.value.trim() || Goals.defaultTitle(metric, goalCtx()),
+    metric, target, deadline: goalForm.elements.deadline.value, created: Goals.todayKey(),
+  };
+  goal.start = Goals.currentValue(goal, data, goalCtx()).value;
+  (data.goals ||= []).push(goal);
+  persist();
+  goalForm.hidden = true;
+  renderGoals();
+});
+
+function renderGoalsList() {
+  const list = data.goals || [];
+  const today = Goals.todayKey();
+  $('#goals-list').innerHTML = list.length ? list.map(g => {
+    const cur = Goals.currentValue(g, data, goalCtx());
+    // La valeur de départ est prise à la première mesure disponible.
+    if (g.start == null && cur.value != null) { g.start = cur.value; persist(); }
+    const ok = Goals.reached(g, cur.value);
+    const left = Goals.daysBetween(today, g.deadline);
+    const when = new Date(Goals.parseDay(g.deadline)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const pct = Math.round(Goals.progressOf(g, cur.value) * 100);
+    return `<article class="goal ${ok ? 'reached' : ''}">
+      <div class="goal-top">
+        <strong>${esc(g.title)}</strong>
+        ${ok ? '<span class="goal-badge">Atteint ✓</span>' : ''}
+        <button type="button" class="btn ghost dr-del" data-del-goal="${g.id}" title="Supprimer">×</button>
+      </div>
+      <div class="goal-values">
+        <span><span class="muted">Actuel</span> <b>${esc(cur.text)}</b></span>
+        <span><span class="muted">Cible</span> <b>${esc(Goals.targetText(g))}</b></span>
+        <span class="muted">${left > 0 ? `${left} jour${left > 1 ? 's' : ''} restants` : left === 0 ? 'Échéance aujourd\'hui' : 'Échéance passée'} · ${when}</span>
+      </div>
+      <div class="goal-bar" role="img" aria-label="Avancement ${pct} %"><i style="width:${pct}%"></i></div>
+      ${g.metric.kind === 'manual' ? `<label class="goal-manual muted">Où j'en suis <input type="number" step="any" data-goal-current="${g.id}" value="${g.current ?? ''}"></label>` : ''}
+    </article>`;
+  }).join('') : '<p class="empty">Aucun objectif pour l\'instant. Fixe-toi une cible, par exemple « ao12 sous 10 s d\'ici fin mars ».</p>';
+}
+
+$('#goals-list').addEventListener('click', e => {
+  const b = e.target.closest('[data-del-goal]');
+  if (!b || !confirm('Supprimer cet objectif ?')) return;
+  data.goals = data.goals.filter(g => g.id !== b.dataset.delGoal);
+  persist();
+  renderGoals();
+});
+$('#goals-list').addEventListener('change', e => {
+  const i = e.target.closest('[data-goal-current]');
+  if (!i) return;
+  const g = data.goals.find(x => x.id === i.dataset.goalCurrent);
+  g.current = i.value === '' ? null : Number(i.value);
+  if (g.start == null) g.start = g.current;
+  persist();
+  renderGoalsList();
+});
+
+// ---------- Calendrier ----------
+let calMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
+let calSelected = Goals.todayKey();
+
+function renderCalendar() {
+  const plan = (data.plan ||= {});
+  const activity = Goals.activityByDay(data);
+  const deadlines = new Map((data.goals || []).map(g => [g.deadline, g.title]));
+  $('#cal-title').textContent = `${Goals.MONTHS[calMonth.getMonth()]} ${calMonth.getFullYear()}`;
+  const first = new Date(calMonth);
+  first.setDate(1 - Goals.weekdayIndex(first)); // lundi de la première semaine
+  const today = Goals.todayKey();
+  let cells = Goals.WEEKDAYS.map(w => `<div class="cal-wd">${w}</div>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(first); d.setDate(first.getDate() + i);
+    const k = Goals.dayKey(d);
+    const items = plan[k] || [];
+    const done = items.filter(x => x.done).length;
+    const act = activity.get(k);
+    const cls = ['cal-day-cell', d.getMonth() !== calMonth.getMonth() ? 'out' : '', k === today ? 'today' : '', k === calSelected ? 'selected' : '',
+      items.length && done === items.length ? 'all-done' : ''].filter(Boolean).join(' ');
+    cells += `<button type="button" class="${cls}" data-day="${k}" aria-label="${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}">
+      <span class="cal-num">${d.getDate()}${deadlines.has(k) ? '<i class="cal-flag" title="Échéance d\'un objectif"></i>' : ''}</span>
+      ${items.length ? `<span class="cal-plan">${done}/${items.length}</span>` : ''}
+      ${act ? `<span class="cal-act">${act.solves ? `${act.solves} solves` : `${act.drills} drills`}</span>` : ''}
+    </button>`;
+    if (i === 34 && d.getMonth() !== calMonth.getMonth()) break; // 5 semaines suffisent
+  }
+  $('#cal-grid').innerHTML = cells;
+  renderDay();
+}
+
+const planGoalPicker = { el: null };
+function renderDay() {
+  const k = calSelected;
+  const items = (data.plan[k] ||= []);
+  const act = Goals.activityByDay(data).get(k);
+  const date = Goals.parseDay(k).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const goals = data.goals || [];
+  const until = Goals.parseDay(k); until.setDate(until.getDate() + 27);
+  $('#cal-day').innerHTML = `
+    <div class="chart-head"><h3>${date}</h3><span class="muted">${act ? `Fait : ${act.solves} solves · ${act.drills} essais de drills` : 'Aucune activité enregistrée'}</span></div>
+    <div class="plan-list">${items.length ? items.map(x => `<label class="plan-item ${x.done ? 'done' : ''}">
+        <input type="checkbox" data-plan-done="${x.id}" ${x.done ? 'checked' : ''}>
+        <span>${esc(x.text)}</span>
+        ${x.goal ? `<span class="variant-tag">${esc(goals.find(g => g.id === x.goal)?.title || 'objectif supprimé')}</span>` : ''}
+        <button type="button" class="btn ghost dr-del" data-plan-del="${x.id}" title="Supprimer">×</button>
+      </label>`).join('') : '<p class="muted">Rien de prévu ce jour-là.</p>'}</div>
+    <form class="plan-form" id="plan-form">
+      <input type="text" name="text" placeholder="Séance (ex. Trainer OLL 20 min, 50 solves, drill X solves…)" maxlength="80" autocomplete="off" required>
+      <div class="plan-opts">
+        <div id="plan-goal"></div>
+        <div class="plan-repeat">
+          <span class="muted">Répéter le</span>
+          <div class="chips">${Goals.WEEKDAYS.map((w, i) => `<label class="chip"><input type="checkbox" name="wd" value="${i}"><span>${w}</span></label>`).join('')}</div>
+          <label class="muted">jusqu'au <input type="date" name="until" value="${Goals.dayKey(until)}"></label>
+        </div>
+      </div>
+      <button type="submit" class="btn primary">Ajouter</button>
+    </form>`;
+  const goalChoice = { value: '' };
+  planGoalPicker.el = picker($('#plan-goal'), { label: 'Objectif', onChange(id) { goalChoice.value = id; } });
+  planGoalPicker.el.set([{ id: '', name: 'Aucun' }, ...goals.map(g => ({ id: g.id, name: g.title }))], '');
+  $('#plan-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const f = e.target;
+    const weekdays = [...f.querySelectorAll('[name="wd"]:checked')].map(i => Number(i.value));
+    Goals.addPlanned(data.plan, { text: f.elements.text.value.trim(), goal: goalChoice.value || null, from: k, until: f.elements.until.value, weekdays });
+    persist();
+    renderCalendar();
+  });
+}
+
+$('#cal-grid').addEventListener('click', e => {
+  const b = e.target.closest('[data-day]');
+  if (!b) return;
+  calSelected = b.dataset.day;
+  const d = Goals.parseDay(calSelected);
+  if (d.getMonth() !== calMonth.getMonth()) calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+  renderCalendar();
+});
+$('#cal-day').addEventListener('change', e => {
+  const c = e.target.closest('[data-plan-done]');
+  if (!c) return;
+  const item = data.plan[calSelected].find(x => x.id === c.dataset.planDone);
+  item.done = c.checked;
+  persist();
+  renderCalendar();
+});
+$('#cal-day').addEventListener('click', e => {
+  const b = e.target.closest('[data-plan-del]');
+  if (!b) return;
+  e.preventDefault();
+  data.plan[calSelected] = data.plan[calSelected].filter(x => x.id !== b.dataset.planDel);
+  persist();
+  renderCalendar();
+});
+$('#cal-prev').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar(); };
+$('#cal-next').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCalendar(); };
+$('#cal-today').onclick = () => { const d = new Date(); calMonth = new Date(d.getFullYear(), d.getMonth(), 1); calSelected = Goals.todayKey(); renderCalendar(); };
+
+function renderGoals() {
+  renderGoalsList();
+  renderCalendar();
+}
 
 /* ---------- Labo d'algos ---------- */
 let labState = null;

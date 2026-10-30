@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=39">
+<link rel="stylesheet" href="css/style.css?v=42">
 </head>
 <body>
 <div class="app">
@@ -30,6 +30,10 @@
     <button class="tab" data-tab="drills" data-title="Drills">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M6.5 7v10M17.5 7v10M21 10v4M6.5 12h11"/></svg>
       <span>Drills</span>
+    </button>
+    <button class="tab" data-tab="goals" data-title="Objectifs">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
+      <span>Objectifs</span>
     </button>
     <button class="tab" data-tab="lab" data-title="Labo d'algos">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></svg>
@@ -286,6 +290,46 @@
     </div>
   </section>
 
+  <section id="view-goals" class="view">
+    <div class="goals-page">
+      <section class="card goals-card">
+        <div class="chart-head">
+          <h2>Objectifs</h2>
+          <button type="button" id="goal-add-btn" class="btn primary">+ Nouvel objectif</button>
+        </div>
+        <form id="goal-form" class="goal-form" hidden>
+          <div id="goal-metric"></div>
+          <div class="goal-field" data-need="session"><span class="muted">Session</span><div id="goal-session"></div></div>
+          <div class="goal-field" data-need="n"><span class="muted">Moyenne</span><div class="chips" id="goal-n"></div></div>
+          <div class="goal-field" data-need="phase"><span class="muted">Étape</span><div class="chips" id="goal-phase"></div></div>
+          <div class="goal-field" data-need="set"><span class="muted">Ensemble</span><div class="chips" id="goal-set"></div></div>
+          <div class="goal-field" data-need="pairs"><span class="muted">Paires</span><div class="chips" id="goal-pairs"></div></div>
+          <div class="goal-row">
+            <label class="stack">Cible <input type="text" name="target" autocomplete="off" required></label>
+            <label class="stack">Échéance <input type="date" name="deadline" required></label>
+          </div>
+          <label class="stack">Intitulé (facultatif) <input type="text" name="title" maxlength="60" autocomplete="off"></label>
+          <p id="goal-error" class="error" hidden></p>
+          <div class="row-btns">
+            <button type="button" class="btn" id="goal-cancel">Annuler</button>
+            <button type="submit" class="btn primary">Créer l'objectif</button>
+          </div>
+        </form>
+        <div id="goals-list" class="goals-list"></div>
+      </section>
+      <section class="card cal-card">
+        <div class="cal-head">
+          <button type="button" id="cal-prev" class="btn ghost" aria-label="Mois précédent">‹</button>
+          <h2 id="cal-title"></h2>
+          <button type="button" id="cal-next" class="btn ghost" aria-label="Mois suivant">›</button>
+          <button type="button" id="cal-today" class="btn ghost">Aujourd'hui</button>
+        </div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div id="cal-day" class="cal-day"></div>
+      </section>
+    </div>
+  </section>
+
   <section id="view-trainer" class="view">
     <div id="tr-empty" class="placeholder">
       <h2>Trainer</h2>
@@ -410,6 +454,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=40"></script>
+<script type="module" src="js/app.js?v=41"></script>
 </body>
 </html>

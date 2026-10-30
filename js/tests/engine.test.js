@@ -6,6 +6,7 @@ import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
 import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
 import { whiteCrossLength, slowMetrics, xsolveSummary } from '../drills.js';
+import { addPlanned, progressOf, reached, dayKey, parseDay } from '../goals.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -182,6 +183,23 @@ test('Slow solves : pauses et TPS', () => {
 test('X solves : nombre de regards et temps', () => {
   const r = xsolveSummary([{ look: 5000, blind: 8000 }, { look: 3000, blind: 4000 }, { look: 1000, blind: 2000 }]);
   ok(r.x === 3 && r.look === 9000 && r.blind === 14000 && r.total === 23000, JSON.stringify(r));
+});
+
+test('Objectifs : avancement et objectif atteint', () => {
+  const g = { metric: { kind: 'avg' }, start: 14000, target: 10000 };
+  eq(progressOf(g, 12000), 0.5, 'à mi-chemin');
+  ok(!reached(g, 10500) && reached(g, 9990), 'temps : plus bas est mieux');
+  const l = { metric: { kind: 'learned' }, start: 10, target: 57 };
+  ok(reached(l, 57) && !reached(l, 56), 'cas appris : plus haut est mieux');
+});
+test('Calendrier : séance répétée certains jours', () => {
+  const plan = {};
+  // Du lundi 2 au dimanche 15 novembre 2026, les lundis et jeudis (0 = lundi, 3 = jeudi).
+  const n = addPlanned(plan, { text: 'Trainer OLL', from: '2026-11-02', until: '2026-11-15', weekdays: [0, 3] });
+  eq(n, 4, 'nombre de séances');
+  ok(plan['2026-11-02'] && plan['2026-11-05'] && plan['2026-11-09'] && plan['2026-11-12'], Object.keys(plan).join());
+  eq(addPlanned(plan, { text: 'Solves', from: '2026-11-03' }), 1, 'séance unique');
+  eq(dayKey(parseDay('2026-02-28')), '2026-02-28', 'aller-retour de date');
 });
 
 export default results;

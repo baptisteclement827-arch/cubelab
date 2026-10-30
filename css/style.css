@@ -541,6 +541,64 @@ td.mean { white-space: nowrap; }
 .case-cell .ll { width: 30px; height: 30px; flex-shrink: 0; }
 .st-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 
+/* ---------- Objectifs ---------- */
+#view-goals { padding: 16px; overflow: auto; }
+.goals-page { width: 100%; max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; align-items: start; }
+.goals-card, .cal-card { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.goal-form { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 10px; background: var(--surface-2); }
+.goal-form[hidden], .goal-field[hidden] { display: none; }
+.goal-form .picker-btn { width: 100%; background: var(--surface); }
+.goal-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.goal-field > .muted { min-width: 70px; }
+.goal-field .chip span { font-family: inherit; }
+.goal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.goal-form .stack { font-size: 14px; font-weight: 600; }
+.goal-form input[type="text"], .goal-form input[type="date"], .plan-form input[type="text"], .plan-form input[type="date"], .goal-manual input {
+  font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+}
+.goals-list { display: flex; flex-direction: column; gap: 8px; }
+.goal { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.goal.reached { border-color: var(--ready); }
+.goal-top { display: flex; align-items: center; gap: 8px; }
+.goal-top strong { flex: 1; }
+.goal-badge { font-size: 12px; font-weight: 700; color: var(--ready); }
+.goal-values { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.goal-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.goal-bar i { display: block; height: 100%; border-radius: 4px; background: var(--series-1); }
+.goal.reached .goal-bar i { background: var(--ready); }
+.goal-manual { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.goal-manual input { width: 100px; }
+.cal-head { display: flex; align-items: center; gap: 6px; }
+.cal-head h2 { margin: 0; font-size: 17px; flex: 1; text-align: center; }
+.cal-head h2::first-letter, .cal-day h3::first-letter { text-transform: uppercase; }
+.cal-head .btn { padding: 4px 10px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
+.cal-day-cell {
+  min-height: 62px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 6px; cursor: pointer;
+  font: inherit; color: var(--text); text-align: left; background: var(--surface-2); border: 2px solid transparent; border-radius: 8px;
+}
+.cal-day-cell.out { opacity: 0.45; }
+.cal-day-cell.today .cal-num { color: var(--accent); }
+.cal-day-cell.selected { border-color: var(--accent); }
+.cal-day-cell.all-done .cal-plan { color: var(--ready); }
+.cal-num { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.cal-flag { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+.cal-plan { font-size: 12px; font-weight: 600; color: var(--inspect); }
+.cal-act { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cal-day { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.cal-day h3 { margin: 0; font-size: 16px; }
+.plan-list { display: flex; flex-direction: column; gap: 4px; }
+.plan-item { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 4px 0; }
+.plan-item span:first-of-type { flex: 1; }
+.plan-item.done span:first-of-type { text-decoration: line-through; color: var(--muted); }
+.plan-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--surface-2); }
+.plan-form .picker-btn { background: var(--surface); }
+.plan-opts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.plan-repeat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.plan-repeat .chip span { font-family: inherit; min-width: 30px; padding: 3px 6px; }
+.plan-form .btn.primary { align-self: flex-start; }
+
 /* ---------- Dialogues ---------- */
 dialog {
   border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
@@ -568,7 +626,7 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
     border-right: 0; border-top: 1px solid var(--border); overflow-x: auto; gap: 0;
   }
   .brand { display: none; }
-  .nav-items { flex-direction: row; flex: 8; gap: 0; } /* 8 onglets + Réglages : largeurs égales */
+  .nav-items { flex-direction: row; flex: 9; gap: 0; } /* 9 onglets + Réglages : largeurs égales */
   .tab { flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 10px; text-align: center; min-width: 0; flex: 1; }
   .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tab span[data-short] { font-size: 0; }
@@ -601,7 +659,11 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .scramble-bar { flex-direction: column; align-items: stretch; }
   .preview { align-self: center; width: min(240px, 100%); }
   .smart-bar { align-self: center; }
-  .lab-grid, .gen-grid, .stats-grid { grid-template-columns: 1fr; }
+  .lab-grid, .gen-grid, .stats-grid, .goals-page { grid-template-columns: 1fr; }
+  #view-goals { padding: 12px 16px; }
+  .cal-day-cell { min-height: 48px; padding: 3px 4px; }
+  /* Sur mobile, l'activité du jour devient un point. */
+  .cal-act { font-size: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin-top: auto; }
   #view-stats { padding: 12px 16px; }
   .sv-tabs { align-self: stretch; min-width: 0; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }

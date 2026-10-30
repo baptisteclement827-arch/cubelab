@@ -45,6 +45,7 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/scramble-guide.js` : suivi du mélange mouvement par mouvement au cube connecté (étape atteinte, correction)
 - `js/splits.js` : découpage CFOP (croix, F2L, OLL, PLL) des solves au cube connecté
 - `js/drills.js` : onglet Drills (BLD Cross + X, Slow solves, X solves : chronos, métriques, stats)
+- `js/goals.js` : onglet Objectifs (objectifs suivis automatiquement, calendrier de séances)
 - `js/statsview.js` : onglet Stats (chiffres clés, progression, répartition, records), graphiques SVG maison
 - `js/picker.js` : menu déroulant maison (sélecteurs de l'onglet Algos)
 - `js/app.js` : interface

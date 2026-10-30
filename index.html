@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=31">
+<link rel="stylesheet" href="css/style.css?v=33">
 </head>
 <body>
 <div class="app">
@@ -26,6 +26,10 @@
     <button class="tab" data-tab="trainer" data-title="Trainer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
       <span>Trainer</span>
+    </button>
+    <button class="tab" data-tab="drills" data-title="Drills">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M6.5 7v10M17.5 7v10M21 10v4M6.5 12h11"/></svg>
+      <span>Drills</span>
     </button>
     <button class="tab" data-tab="lab" data-title="Labo d'algos">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></svg>
@@ -231,6 +235,44 @@
       </div>
     </div>
   </section>
+  <section id="view-drills" class="view">
+    <aside class="side dr-side">
+      <div class="card dr-options">
+        <div id="dr-drill"></div>
+        <div class="dr-row">
+          <span class="muted">Paires à prévoir</span>
+          <div id="dr-pairs" class="seg" role="tablist" aria-label="Paires à prévoir">
+            <button type="button" role="tab" data-n="0">Croix</button>
+            <button type="button" role="tab" data-n="1">+1</button>
+            <button type="button" role="tab" data-n="2">+2</button>
+          </div>
+        </div>
+      </div>
+      <div id="dr-stats" class="card dr-stats"></div>
+      <div class="card solves dr-history">
+        <table>
+          <thead><tr><th>#</th><th>X</th><th>Analyse</th><th>Exéc.</th><th></th></tr></thead>
+          <tbody id="dr-body"></tbody>
+        </table>
+        <p id="dr-empty" class="empty">Aucun essai pour l'instant.</p>
+      </div>
+    </aside>
+    <div class="stage">
+      <div class="scramble-bar">
+        <div id="dr-scramble" class="scramble"></div>
+        <div class="scramble-actions">
+          <button type="button" id="dr-new" class="btn ghost">Nouveau</button>
+        </div>
+      </div>
+      <div id="dr-zone" class="timer-zone">
+        <div id="dr-phase" class="dr-phase"></div>
+        <div id="dr-timer" class="timer">0.00</div>
+        <div id="dr-hint" class="hint"></div>
+        <div id="dr-result" class="dr-result" hidden></div>
+      </div>
+    </div>
+  </section>
+
   <section id="view-trainer" class="view">
     <div id="tr-empty" class="placeholder">
       <h2>Trainer</h2>
@@ -355,6 +397,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=32"></script>
+<script type="module" src="js/app.js?v=33"></script>
 </body>
 </html>

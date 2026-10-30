@@ -5,7 +5,8 @@ import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=28';
 import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
-import { splitsOf, PHASES } from './splits.js?v=27';
+import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
+import { DRILLS, DrillTimer, drillStats } from './drills.js?v=33';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -277,6 +278,7 @@ const activeTimer = () => {
   if (document.querySelector('dialog[open]')) return null;
   if (activeTab === 'timer') return timer;
   if (activeTab === 'trainer' && training) return trainerTimer;
+  if (activeTab === 'drills') return drillTimer;
   return null;
 };
 
@@ -732,6 +734,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     activeTab = tab.dataset.tab;
     timer.cancel();
     trainerTimer.cancel();
+    drillTimer.cancel();
     document.querySelectorAll('.tab[data-tab]').forEach(t => {
       t.classList.toggle('active', t === tab);
       if (t === tab) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
@@ -740,11 +743,12 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
     $('#page-title').textContent = tab.dataset.title;
     $('.selectors').hidden = !TABS_WITH_SESSION.includes(activeTab);
     renderSelectors(); // la liste des sessions diffère dans l'onglet Stats
-    $('#device-btn').hidden = !['timer', 'trainer'].includes(activeTab);
-    $('#cube-btn').hidden = !['timer', 'trainer'].includes(activeTab);
+    $('#device-btn').hidden = !['timer', 'trainer', 'drills'].includes(activeTab);
+    $('#cube-btn').hidden = !['timer', 'trainer', 'drills'].includes(activeTab);
     if (activeTab === 'lab') renderLab();
     if (activeTab === 'gen') renderGenCase();
     if (activeTab === 'trainer') renderTrainer();
+    if (activeTab === 'drills') renderDrills();
     if (activeTab === 'stats') renderStatsPage();
   };
 });
@@ -1443,6 +1447,157 @@ $('#tr-edit').onclick = () => {
 };
 
 renderAlgos();
+
+/* ---------- Drills ---------- */
+// BLD Croix + X : analyse sans limite, puis exécution (à l'aveugle) chronométrée. Avec le cube connecté,
+// la réussite est vérifiée (croix + paires en place) ; sinon on la note soi-même.
+let drillId = data.drillId || DRILLS[0].id;
+let drillPairs = data.drillPairs ?? 0;
+let drillScramble = '';
+let drillPending = null; // essai terminé, en attente de « Réussi / Raté »
+const drillList = () => ((data.drills ||= {})[drillId] ||= []);
+const drillPicker = picker($('#dr-drill'), {
+  label: 'Drill',
+  onChange(id) { drillId = data.drillId = id; persist(); renderDrills(); },
+});
+const DRILL_HINTS = {
+  idle: 'Espace : lancer l\'analyse',
+  done: 'Espace : nouvelle analyse',
+  analysis: 'Prévois la croix et les paires · maintiens Espace puis relâche pour exécuter',
+  hold: 'Attends le vert…',
+  ready: 'Relâche pour lancer l\'exécution',
+  running: '',
+};
+
+const drillTimer = new DrillTimer({
+  settings,
+  onUpdate(v) {
+    const el = $('#dr-timer');
+    el.className = 'timer';
+    const phase = $('#dr-phase');
+    if (v.state === 'running') {
+      el.textContent = runningText(v.ms);
+      phase.textContent = 'Exécution';
+    } else if (v.analysis !== undefined && v.state !== 'done') {
+      el.textContent = (v.analysis / 1000).toFixed(1);
+      el.classList.add(v.state === 'analysis' ? 'inspect' : v.state);
+      phase.textContent = 'Analyse';
+    } else if (v.state === 'done') {
+      el.textContent = Stats.fmt(v.ms, { precision: precision() });
+      phase.textContent = `Analyse ${(v.analysis / 1000).toFixed(1)} s`;
+    }
+    document.body.classList.toggle('solving', v.state === 'running');
+    $('#dr-hint').textContent = drillPending && v.state === 'done' ? '' : DRILL_HINTS[v.state] ?? '';
+  },
+  onDone({ analysis, exec }) {
+    drillPending = { n: drillPairs, s: drillScramble, analysis, exec, d: Date.now() };
+    // Cube connecté : vérification automatique (croix d'une couleur quelconque + au moins n paires).
+    if (smart.conn && smart.state) {
+      const r = crossAndPairs(smart.state);
+      saveDrill(r.cross && r.pairs >= drillPairs, true, r);
+    } else {
+      showDrillResult();
+    }
+    newDrillScramble();
+  },
+});
+// Tant qu'un essai n'est pas noté, on ne relance pas d'analyse.
+const drillPress = drillTimer.press.bind(drillTimer);
+drillTimer.press = () => { if (!drillPending) drillPress(); };
+
+function showDrillResult(auto) {
+  const r = $('#dr-result');
+  r.hidden = false;
+  if (drillPending) {
+    $('#dr-hint').textContent = '';
+    r.innerHTML = `<span>Croix${drillPending.n ? ` + ${drillPending.n} paire${drillPending.n > 1 ? 's' : ''}` : ''} réussie ?</span>
+      <button type="button" class="btn ok-btn" data-drill-ok="1">Réussi</button>
+      <button type="button" class="btn danger" data-drill-ok="0">Raté</button>`;
+  } else if (auto) {
+    const last = drillList().at(-1);
+    const what = auto.cross ? `croix + ${auto.pairs} paire${auto.pairs > 1 ? 's' : ''} en place` : 'pas de croix en place';
+    r.innerHTML = `<span class="${last.ok ? 'yes' : 'no'}">${last.ok ? '✓ Réussi' : '✗ Raté'}</span><span class="muted">(${what}, vérifié par le cube)</span>`;
+  }
+}
+
+function saveDrill(ok, auto, check) {
+  if (!drillPending) return;
+  drillList().push({ ...drillPending, ok, ...(auto ? { auto: true } : {}) });
+  drillPending = null;
+  persist();
+  showDrillResult(auto ? check : null);
+  if (!auto) $('#dr-result').hidden = true;
+  renderDrillStats();
+  $('#dr-hint').textContent = DRILL_HINTS.done;
+}
+
+async function newDrillScramble() {
+  const drill = DRILLS.find(d => d.id === drillId);
+  $('#dr-scramble').textContent = 'Génération du mélange…';
+  drillScramble = await PUZZLES[drill.puzzle].scramble({ type: settings().scrambleType });
+  $('#dr-scramble').textContent = drillScramble;
+}
+
+function renderDrills() {
+  drillPicker.set(DRILLS, drillId);
+  document.querySelectorAll('#dr-pairs [data-n]').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.n) === drillPairs);
+    b.setAttribute('aria-selected', Number(b.dataset.n) === drillPairs);
+  });
+  if (!drillScramble) newDrillScramble();
+  if (!drillTimer.busy && drillTimer.state !== 'done') {
+    $('#dr-timer').textContent = '0.0';
+    $('#dr-phase').textContent = '';
+    $('#dr-hint').textContent = DRILL_HINTS.idle;
+  }
+  renderDrillStats();
+}
+
+function renderDrillStats() {
+  const list = drillList();
+  const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
+  const sec = ms => (ms == null ? '–' : `${(ms / 1000).toFixed(1)} s`);
+  const rows = [0, 1, 2].map(n => ({ n, st: drillStats(list.filter(x => x.n === n)) })).filter(r => r.st);
+  $('#dr-stats').innerHTML = rows.length ? `<table>
+      <thead><tr><th></th><th>Essais</th><th>Réussite</th><th>Analyse</th><th>Exéc.</th></tr></thead>
+      <tbody>${rows.map(({ n, st }) => `<tr class="${n === drillPairs ? 'current' : ''}">
+        <td>${n ? `+${n}` : 'Croix'}</td><td>${st.count}</td><td>${Math.round(st.success * 100)} %</td><td>${sec(st.analysis)}</td><td>${f(st.exec)}</td>
+      </tr>`).join('')}</tbody>
+    </table><p class="muted dr-note">Moyennes sur les essais réussis.</p>`
+    : '<p class="empty">Les stats apparaîtront après ton premier essai.</p>';
+  const rowsH = [];
+  for (let i = list.length - 1; i >= Math.max(0, list.length - 100); i--) {
+    const x = list[i];
+    rowsH.push(`<tr><td>${i + 1}</td><td>${x.n ? `+${x.n}` : 'C'}</td><td>${sec(x.analysis)}</td>
+      <td class="${x.ok ? '' : 'dr-fail'}">${Stats.fmt(x.exec, { precision: precision() })}</td>
+      <td><span class="${x.ok ? 'yes' : 'no'}">${x.ok ? '✓' : '✗'}</span> <button type="button" class="btn ghost dr-del" data-del-drill="${i}" title="Supprimer">×</button></td></tr>`);
+  }
+  $('#dr-body').innerHTML = rowsH.join('');
+  $('#dr-empty').hidden = list.length > 0;
+}
+
+$('#dr-pairs').addEventListener('click', e => {
+  const b = e.target.closest('[data-n]');
+  if (!b || drillTimer.busy) return;
+  drillPairs = data.drillPairs = Number(b.dataset.n);
+  persist();
+  renderDrills();
+});
+$('#dr-new').onclick = () => { if (!drillTimer.busy) newDrillScramble(); };
+$('#dr-result').addEventListener('click', e => {
+  const b = e.target.closest('[data-drill-ok]');
+  if (b) saveDrill(b.dataset.drillOk === '1', false);
+});
+$('#dr-body').addEventListener('click', e => {
+  const b = e.target.closest('[data-del-drill]');
+  if (!b || !confirm('Supprimer cet essai ?')) return;
+  drillList().splice(Number(b.dataset.delDrill), 1);
+  persist();
+  renderDrillStats();
+});
+const drZone = $('#dr-zone');
+drZone.addEventListener('pointerdown', e => { if (isTouch(e) && !e.target.closest('button')) { e.preventDefault(); drillTimer.pointerDown(); } });
+drZone.addEventListener('pointerup', e => { if (isTouch(e) && !e.target.closest('button')) drillTimer.pointerUp(); });
 
 /* ---------- Labo d'algos ---------- */
 let labState = null;

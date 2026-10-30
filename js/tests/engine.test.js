@@ -4,7 +4,7 @@ import { parseAlg, formatAlg, invertMoves, mirrorMoves, simplify, metrics } from
 import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
-import { cfopSplits } from '../splits.js';
+import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -146,6 +146,17 @@ test('Splits : croix puis F2L détectées', () => {
   const sp = cfopSplits(formatAlg(invertMoves(parseAlg(sol))), mv, mv.at(-1)[1]);
   ok(sp && sp.moves.cross + sp.moves.f2l + sp.moves.oll + sp.moves.pll === mv.length, JSON.stringify(sp));
   ok(cfopSplits('R', [['U', 100]], 100) === null, 'solve non résolu : pas de découpage');
+});
+
+// ---------- Drill croix + paires ----------
+test('Drill : croix et paires en place', () => {
+  const r0 = crossAndPairs(run(''));
+  ok(r0.cross && r0.pairs === 4, 'cube résolu : croix + 4 paires');
+  eq(pairsSolved(run('U2'), 3), 4, 'U2 ne touche pas la F2L');
+  const r1 = run("R U R'");
+  ok(pairsSolved(r1, 3) < 4, "R U R' dérange au moins une paire");
+  ok(crossAndPairs(run('F')).cross, 'F : une autre croix (ex. B) reste faite');
+  eq(pairsSolved(run("R U R' U'"), 3), 3, 'sexy move : seule la paire FR est dérangée');
 });
 
 export default results;

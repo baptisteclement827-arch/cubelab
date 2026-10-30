@@ -69,3 +69,34 @@ export function splitsOf(solve) {
   if (!memo.has(solve)) memo.set(solve, cfopSplits(solve.s, solve.mv, solve.t));
   return memo.get(solve);
 }
+
+// ---------- Vérification d'un drill (croix + paires) ----------
+// Nombre de paires F2L en place autour d'une croix sur la face x (arête du milieu + coin de la croix).
+export function pairsSolved(s, x) {
+  const sides = [0, 1, 2, 3, 4, 5].filter(f => f !== x && f !== opposite(x));
+  let n = 0;
+  for (let i = 0; i < sides.length; i++) {
+    for (let j = i + 1; j < sides.length; j++) {
+      const [a, b] = [sides[i], sides[j]];
+      if (a === opposite(b)) continue;
+      const slot = PIECES.filter(p => {
+        const f = p.map(faceOf);
+        return f.includes(a) && f.includes(b) && !f.includes(opposite(x)) && (p.length === 2 || f.includes(x));
+      });
+      if (slot.every(p => solvedPiece(s, p))) n++;
+    }
+  }
+  return n;
+}
+
+// Meilleur résultat « croix + paires » sur l'état du cube : la croix (n'importe quelle couleur) avec le plus de paires.
+// Renvoie { cross: true/false, pairs }.
+export function crossAndPairs(s) {
+  let best = { cross: false, pairs: 0 };
+  for (let x = 0; x < 6; x++) {
+    if (!crossDone(s, x)) continue;
+    const pairs = pairsSolved(s, x);
+    if (!best.cross || pairs > best.pairs) best = { cross: true, pairs };
+  }
+  return best;
+}

@@ -186,13 +186,17 @@ export function whiteCrossLength(state) {
   return table[encode(ks)];
 }
 
-// Niveaux du drill : 3 niveaux de cross (selon sa longueur), puis cross + 1 et + 2 paires.
-export const LEVELS = [
-  { id: 'c1', name: 'Cross 1', pairs: 0, title: 'Cross en 4 mouvements ou moins', min: 0, max: 4 },
-  { id: 'c2', name: 'Cross 2', pairs: 0, title: 'Cross en 5 ou 6 mouvements', min: 5, max: 6 },
-  { id: 'c3', name: 'Cross 3', pairs: 0, title: 'Cross en 7 mouvements ou plus', min: 7, max: 99 },
-  { id: 'x1', name: '+1', pairs: 1, title: 'Cross + 1 paire' },
-  { id: 'x2', name: '+2', pairs: 2, title: 'Cross + 2 paires' },
+// Deux réglages indépendants : le nombre de paires à prévoir, et la difficulté de la cross (longueur de la cross blanche).
+export const PAIRS = [
+  { n: 0, name: 'Cross' },
+  { n: 1, name: '+1' },
+  { n: 2, name: '+2' },
 ];
-// Niveau d'un essai enregistré (les anciens essais n'avaient que le nombre de paires).
-export const levelOf = x => x.level || (x.n ? `x${x.n}` : 'c');
+export const DIFFICULTIES = [
+  { id: 'easy', name: 'Facile', short: 'F', title: 'Cross en 4 mouvements ou moins', min: 0, max: 4 },
+  { id: 'medium', name: 'Moyenne', short: 'M', title: 'Cross en 5 ou 6 mouvements', min: 5, max: 6 },
+  { id: 'hard', name: 'Difficile', short: 'D', title: 'Cross en 7 mouvements ou plus', min: 7, max: 99 },
+  { id: 'any', name: 'Normale', short: '', title: 'Mélange quelconque' },
+];
+// Difficulté d'un essai enregistré (anciennes versions : niveaux c1/c2/c3, ou rien = normale).
+export const difficultyOf = x => x.diff || { c1: 'easy', c2: 'medium', c3: 'hard' }[x.level] || 'any';

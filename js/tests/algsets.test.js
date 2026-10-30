@@ -1,7 +1,7 @@
 // Tests de la bibliothèque d'algos : chaque algo résout bien son cas, et les cas couvrent tout l'ensemble.
 import { NxNCube } from '../core/nxn.js';
 import { parseAlg, mirrorMoves, formatAlg } from '../core/notation.js';
-import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState, reverseSetup, stateAfter } from '../algsets/index.js';
+import { ALG_SETS, caseState, solvesCase, relabel, caseWeights, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L, GRAY } from '../algsets/index.js';
 import { timeStats } from '../stats.js';
 
 const results = [];
@@ -190,6 +190,35 @@ test('Statistiques d\'entraînement (moyenne, médiane, meilleur, pire)', () => 
   const st = timeStats([3000, 1000, 2000, 6000]);
   ok(st.count === 4 && st.mean === 3000 && st.median === 2500 && st.best === 1000 && st.worst === 6000, JSON.stringify(st));
   ok(timeStats([]) === null, 'vide = null');
+});
+
+// ---------- F2L ----------
+const f2l = ALG_SETS['333/f2l'];
+test('F2L : 41 cas, chaque algo résout son cas (slot FR) sans casser la croix ni les autres slots', () => {
+  ok(f2l.CASES.length === 41, `${f2l.CASES.length} cas`);
+  for (const c of f2l.CASES) ok(solvesF2L(c, 'FR', c.alg) === '', `${c.name} ne résout pas son cas`);
+});
+test('F2L : 41 cas distincts (à l\'AUF près), aucun déjà résolu', () => {
+  const seen = new Map();
+  for (const c of f2l.CASES) {
+    let st = f2lCaseState(c, 'FR');
+    ok(!st.every((v, i) => v === GRAY || v === Math.floor(i / 9)), `${c.name} déjà résolu`);
+    const keys = [];
+    for (let a = 0; a < 4; a++, st = c3.apply(st, U)) keys.push(Array.from(st).join());
+    const k = keys.sort()[0];
+    ok(!seen.has(k), `${c.name} et ${seen.get(k)} sont le même cas`);
+    seen.set(k, c.name);
+  }
+});
+test('F2L : algos traduits pour les 4 slots', () => {
+  for (const c of f2l.CASES) for (const sl of SLOTS) ok(solvesF2L(c, sl.id, slotAlg(c, sl.id)) === '', `${c.name} ${sl.id}`);
+  ok(slotAlg(f2l.CASES[3], 'BL') === "L U L'", `F2L 4 en BL : ${slotAlg(f2l.CASES[3], 'BL')}`);
+});
+test('F2L : variante qui utilise des slots libres', () => {
+  const c = f2l.CASES.find(x => x.id === 'f2l4');
+  const alg = "R U R' B U B'"; // B U B' dérange les slots arrière
+  ok(solvesF2L(c, 'FR', alg) === null, 'refusée si les slots arrière sont remplis');
+  ok(solvesF2L(c, 'FR', alg, ['BR', 'BL']) !== null, 'acceptée si BR et BL sont libres');
 });
 
 export default results;

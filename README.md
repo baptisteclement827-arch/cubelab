@@ -35,7 +35,7 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/solver/generator.js` : générateur d'algos (IDA* + table de distances, masques OLL/F2L, AUF)
 - `js/workers/` + `js/solver/client.js` : calculs lourds hors du thread de l'interface
 - `js/puzzles/registry.js` : liste des puzzles (seul le 3x3 est activé)
-- `js/algsets/` : bibliothèque d'algos (`333-oll.js` : les 57 OLL, `333-pll.js` : les 21 PLL, par sous-ensemble ; `index.js` : ensembles par puzzle, état de chaque cas)
+- `js/algsets/` : bibliothèque d'algos (`333-f2l.js` : les 41 F2L, `333-oll.js` : les 57 OLL, `333-pll.js` : les 21 PLL, par sous-ensemble ; F2L : 4 slots et variantes avec slots libres ; `index.js` : ensembles par puzzle, état de chaque cas)
 - Onglet Algos → Train : sélection de cas (un par un, par subset ou par état) puis Trainer (chrono par cas, temps enregistrés dans `data.algs`)
 - `js/timer.js` : machine à états du timer (inspection WCA, maintien, pénalités)
 - `js/stats.js` : moyennes WCA (ao5, ao12, ...), formatage

@@ -1,7 +1,7 @@
 import { NxNCube } from './core/nxn.js';
 import { parseAlg, formatAlg, formatMove, invertMoves, mirrorMoves, simplify, metrics } from './core/notation.js';
 // ?v=… : GitHub Pages laisse le navigateur garder les fichiers 10 min ; changer le numéro force le rechargement.
-import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=6';
+import { PUZZLES, DEFAULT_PUZZLE } from './puzzles/registry.js?v=28';
 import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
@@ -11,8 +11,8 @@ import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/ga
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
 import { ScrambleGuide } from './scramble-guide.js?v=26';
 import { picker } from './picker.js?v=16';
-import { renderNet, renderLL } from './render2d.js?v=7';
-import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter } from './algsets/index.js?v=15';
+import { renderNet, renderLL, renderF2L } from './render2d.js?v=28';
+import { ALG_SETS, caseState as algCaseState, solvesCase, caseWeights, pickWeighted, randomCaseState, reverseSetup, stateAfter, SLOTS, slotAlg, f2lCaseState, solvesF2L } from './algsets/index.js?v=28';
 import { solver, runGenerator } from './solver/client.js';
 import { caseState, maskedSolved, MOVE_BASES } from './solver/generator.js';
 import { normalizeOrientation } from './core/orientation.js';
@@ -781,12 +781,12 @@ const caseImages = new Map();
 const caseImageFor = c => {
   if (!caseImages.has(c.id)) {
     const set = Object.values(ALG_SETS).find(x => x.CASES.includes(c));
-    caseImages.set(c.id, renderLL(algCaseState(c.alg), set.view));
+    caseImages.set(c.id, set.view === 'f2l' ? renderF2L(f2lCaseState(c)) : renderLL(algCaseState(c.alg), set.view));
   }
   return caseImages.get(c.id);
 };
 const caseImage = c => {
-  if (!caseImages.has(c.id)) caseImages.set(c.id, renderLL(algCaseState(c.alg), currentSet().view));
+  if (!caseImages.has(c.id)) caseImages.set(c.id, currentSet().view === 'f2l' ? renderF2L(f2lCaseState(c)) : renderLL(algCaseState(c.alg), currentSet().view));
   return caseImages.get(c.id);
 };
 
@@ -800,7 +800,7 @@ const setKey = () => `${algosPuzzle}/${algosSet}`;
 const currentSet = () => ALG_SETS[setKey()];
 const progressIn = (key, id) => data.algs[key]?.[id] || {};
 const progress = id => progressIn(setKey(), id);
-const myAlg = c => progress(c.id).alg || c.alg;
+const myAlg = c => progress(c.id).alg || progress(c.id).slots?.FR || c.alg;
 const statusOf = c => progress(c.id).status || 'unknown';
 
 const setProgress = (id, patch) => setProgressIn(setKey(), id, patch);
@@ -813,8 +813,8 @@ function setProgressIn(key, id, patch) {
 }
 
 let openCaseId = null;
-// Un algo enregistré est verrouillé ; maintenir 1 s dessus le rend modifiable.
-let editingCaseId = null;
+// Un algo enregistré est verrouillé ; maintenir 1 s dessus le rend modifiable (« cas/champ » en cours d'édition).
+let editingField = null;
 const UNLOCK_MS = 1000;
 
 function caseButton(c) {
@@ -841,6 +841,21 @@ function renderAlgoList() {
   if (openCaseId) placeCasePanel(false);
 }
 
+// Champs d'algo d'un cas : un seul (« Mon algo ») pour OLL/PLL, un par slot (FR, FL, BR, BL) pour la F2L.
+function caseFields(set, c) {
+  if (set.view === 'f2l') return SLOTS.map(sl => ({ key: sl.id, label: sl.name, def: slotAlg(c, sl.id), slot: sl.id }));
+  return [{ key: 'alg', label: 'Mon algo', def: c.alg }];
+}
+const fieldValue = (c, key) => (key === 'alg' ? progress(c.id).alg : progress(c.id).slots?.[key]) || '';
+function setFieldValue(c, key, alg) {
+  if (key === 'alg') { setProgress(c.id, { alg }); return; }
+  const slots = { ...progress(c.id).slots };
+  if (alg) slots[key] = alg; else delete slots[key];
+  setProgress(c.id, { slots: Object.keys(slots).length ? slots : null });
+}
+const fieldOf = (el, c) => caseFields(currentSet(), c).find(f => f.key === el.dataset.field);
+const fieldId = (c, key) => `${c.id}/${key}`;
+
 // Le panneau du cas s'insère sous la rangée de la case cliquée, sur toute la largeur de la grille.
 function placeCasePanel(scroll) {
   const set = currentSet();
@@ -848,8 +863,9 @@ function placeCasePanel(scroll) {
   const btn = c && document.querySelector(`.case[data-case="${c.id}"]`);
   document.querySelector('.case-panel')?.remove();
   if (!btn) { openCaseId = null; return; }
-  if (editingCaseId !== c.id) editingCaseId = null;
+  if (!editingField?.startsWith(`${c.id}/`)) editingField = null;
   const row = [...btn.parentElement.children].filter(el => el.classList.contains('case') && el.offsetTop === btn.offsetTop);
+  const fields = caseFields(set, c);
   const panel = document.createElement('div');
   panel.className = 'case-panel';
   panel.innerHTML = `
@@ -859,14 +875,17 @@ function placeCasePanel(scroll) {
         <h3>${esc(c.name)}</h3>
         <button type="button" class="btn ghost" data-close-case>Fermer</button>
       </div>
-      <div class="stack">
-        <label for="case-alg-${c.id}">Mon algo</label>
-        <textarea id="case-alg-${c.id}" class="case-alg" rows="2" spellcheck="false" placeholder="${esc(c.alg)}">${esc(progress(c.id).alg || '')}</textarea>
-        <div class="case-alg-locked" tabindex="0" role="button" aria-label="Algo verrouillé : maintenir 1 seconde pour modifier" hidden>
-          <span class="case-alg-text"></span>
-        </div>
+      <div class="alg-fields${fields.length > 1 ? ' cols' : ''}">
+        ${fields.map(fd => `<div class="alg-field" data-field="${fd.key}">
+          <label for="case-alg-${c.id}-${fd.key}">${fd.label}</label>
+          <textarea id="case-alg-${c.id}-${fd.key}" class="case-alg" rows="2" spellcheck="false" placeholder="${esc(fd.def)}">${esc(fieldValue(c, fd.key))}</textarea>
+          <div class="case-alg-locked" tabindex="0" role="button" aria-label="Algo verrouillé : maintenir 1 seconde pour modifier" hidden>
+            <span class="case-alg-text"></span>
+          </div>
+          <p class="case-check muted"></p>
+        </div>`).join('')}
       </div>
-      <p class="case-check muted"></p>
+      ${set.view === 'f2l' ? variantsHtml(c) : ''}
       <div class="case-times">
         <div class="muted">${caseTimesText('Sans check', progress(c.id).times)}${caseTimesText('Avec check', progress(c.id).timesCheck)}</div>
         ${timesCount(c.id) ? '<button type="button" class="btn ghost danger" data-clear-times>Supprimer les stats</button>' : ''}
@@ -876,28 +895,79 @@ function placeCasePanel(scroll) {
       </div>
     </div>`;
   row.at(-1).after(panel);
-  checkCaseAlg(panel, set, c);
-  updateLock(panel, c);
+  panel.querySelectorAll('.alg-field').forEach(el => { checkCaseAlg(el, c); updateLock(el, c); });
   if (scroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function checkCaseAlg(panel, set, c) {
-  const input = panel.querySelector('.case-alg');
-  const out = panel.querySelector('.case-check');
-  const alg = input.value.trim();
+function checkCaseAlg(el, c) {
+  const fd = fieldOf(el, c);
+  const out = el.querySelector('.case-check');
+  const alg = el.querySelector('.case-alg').value.trim();
   out.className = 'case-check';
   if (!alg) {
-    out.innerHTML = `Algo par défaut : <code>${esc(c.alg)}</code>`;
+    out.innerHTML = `Par défaut : <code>${esc(fd.def)}</code>`;
     out.classList.add('muted');
     return;
   }
   try {
-    const auf = solvesCase(set, c, alg);
-    if (auf === null) { out.textContent = 'Cet algo ne résout pas ce cas'; out.classList.add('error'); }
-    else { out.textContent = `✓ Résout le cas${auf ? ` (en faisant ${auf} avant, par rapport au schéma)` : ''}`; out.classList.add('ok'); }
+    const auf = fd.slot ? solvesF2L(c, fd.slot, alg) : solvesCase(currentSet(), c, alg);
+    if (auf === null) { out.textContent = 'Ne résout pas ce cas'; out.classList.add('error'); }
+    else { out.textContent = `✓ Résout le cas${auf ? ` (avec ${auf} avant)` : ''}`; out.classList.add('ok'); }
   } catch (e) {
     out.textContent = e.message;
     out.classList.add('error');
+  }
+}
+
+// ---------- Variantes F2L (slots libres) ----------
+function variantsHtml(c) {
+  const list = progress(c.id).variants || [];
+  const chips = (name, type, checked, disabled = () => false) => SLOTS.map(sl => `<label class="chip"><input type="${type}" name="${name}" value="${sl.id}" ${checked(sl.id) ? 'checked' : ''} ${disabled(sl.id) ? 'disabled' : ''}><span>${sl.name}</span></label>`).join('');
+  return `<div class="variants">
+    <strong class="variants-title">Variantes avec slots libres</strong>
+    ${list.length ? list.map((v, i) => `<div class="variant">
+      <span class="variant-tag">${v.slot} · ${v.empty.join(' + ')} libre${v.empty.length > 1 ? 's' : ''}</span>
+      <code>${esc(v.alg)}</code>
+      <button type="button" class="btn ghost danger" data-del-variant="${i}">Supprimer</button>
+    </div>`).join('') : '<p class="muted">Aucune variante pour l\'instant.</p>'}
+    <details class="variant-add">
+      <summary>+ Ajouter une variante</summary>
+      <div class="variant-form">
+        <div class="variant-row"><span class="muted">Slot</span><div class="chips">${chips('v-slot', 'radio', id => id === 'FR')}</div></div>
+        <div class="variant-row"><span class="muted">Slots libres</span><div class="chips">${chips('v-empty', 'checkbox', () => false, id => id === 'FR')}</div></div>
+        <input type="text" class="variant-alg" spellcheck="false" placeholder="Algo de la variante">
+        <p class="variant-check muted">Choisis au moins un slot libre et tape l'algo.</p>
+        <button type="button" class="btn primary" data-add-variant disabled>Ajouter</button>
+      </div>
+    </details>
+  </div>`;
+}
+
+// Lit le formulaire de variante et vérifie l'algo ; renvoie la variante si elle est valide.
+function readVariant(form, c) {
+  const slot = form.querySelector('[name="v-slot"]:checked').value;
+  form.querySelectorAll('[name="v-empty"]').forEach(i => {
+    i.disabled = i.value === slot;
+    if (i.disabled) i.checked = false;
+  });
+  const empty = [...form.querySelectorAll('[name="v-empty"]:checked')].map(i => i.value);
+  const alg = form.querySelector('.variant-alg').value.trim();
+  const out = form.querySelector('.variant-check');
+  const add = form.querySelector('[data-add-variant]');
+  add.disabled = true;
+  out.className = 'variant-check';
+  if (!empty.length || !alg) { out.textContent = 'Choisis au moins un slot libre et tape l\'algo.'; out.classList.add('muted'); return null; }
+  try {
+    const auf = solvesF2L(c, slot, alg, empty);
+    if (auf === null) { out.textContent = 'Ne résout pas ce cas avec ces slots libres'; out.classList.add('error'); return null; }
+    out.textContent = `✓ Résout le cas en ${slot}${auf ? ` (avec ${auf} avant)` : ''}`;
+    out.classList.add('ok');
+    add.disabled = false;
+    return { slot, empty, alg };
+  } catch (e) {
+    out.textContent = e.message;
+    out.classList.add('error');
+    return null;
   }
 }
 
@@ -911,20 +981,20 @@ function caseTimesText(label, times) {
   return `<p>${label} (${st.count}) : moyenne ${f(st.mean)} · médiane ${f(st.median)} · meilleur ${f1(st.best)} · pire ${f1(st.worst)}</p>`;
 }
 
-function updateLock(panel, c) {
-  const saved = progress(c.id).alg || '';
-  const locked = !!saved && editingCaseId !== c.id;
-  const box = panel.querySelector('.case-alg-locked');
+function updateLock(el, c) {
+  const saved = fieldValue(c, el.dataset.field);
+  const locked = !!saved && editingField !== fieldId(c, el.dataset.field);
+  const box = el.querySelector('.case-alg-locked');
   box.hidden = !locked;
-  panel.querySelector('.case-alg').hidden = locked;
+  el.querySelector('.case-alg').hidden = locked;
   box.querySelector('.case-alg-text').textContent = saved;
 }
 
 // Fige l'algo s'il est valide et enregistré (sortie du champ, Tab, Entrée).
-function commitCaseAlg(panel, c) {
-  const input = panel.querySelector('.case-alg');
-  if (input.value.trim() && input.value.trim() === progress(c.id).alg) editingCaseId = null;
-  updateLock(panel, c);
+function commitCaseAlg(el, c) {
+  const v = el.querySelector('.case-alg').value.trim();
+  if (v && v === fieldValue(c, el.dataset.field) && editingField === fieldId(c, el.dataset.field)) editingField = null;
+  updateLock(el, c);
 }
 
 let unlockTimer = null;
@@ -933,11 +1003,11 @@ function startUnlock(box) {
   box.classList.add('pressing');
   unlockTimer = setTimeout(() => {
     box.classList.remove('pressing');
-    const panel = box.closest('.case-panel');
+    const el = box.closest('.alg-field');
     const c = currentSet().CASES.find(x => x.id === openCaseId);
-    editingCaseId = c.id;
-    updateLock(panel, c);
-    const input = panel.querySelector('.case-alg');
+    editingField = fieldId(c, el.dataset.field);
+    updateLock(el, c);
+    const input = el.querySelector('.case-alg');
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
   }, UNLOCK_MS);
@@ -963,6 +1033,8 @@ function refreshCaseButton(c) {
     Object.assign(document.createElement('template'), { innerHTML: caseButton(c).trim() }).content.firstChild);
 }
 
+const openCaseObj = () => currentSet()?.CASES.find(x => x.id === openCaseId);
+
 $('#algos-list').addEventListener('click', e => {
   const b = e.target.closest('.case[data-case]');
   const sub = e.target.closest('[data-subset-toggle]');
@@ -971,40 +1043,52 @@ $('#algos-list').addEventListener('click', e => {
   else if (b) openCase(b.dataset.case);
   else if (e.target.closest('[data-close-case]')) openCase(openCaseId);
   else if (e.target.closest('[data-clear-times]')) {
-    const c = currentSet().CASES.find(x => x.id === openCaseId);
+    const c = openCaseObj();
     if (!confirm(`Supprimer les ${timesCount(c.id)} temps d'entraînement de ${c.name} ?`)) return;
     setProgress(c.id, { times: null, timesCheck: null });
+    placeCasePanel(false);
+  } else if (e.target.closest('[data-add-variant]')) {
+    const c = openCaseObj();
+    const v = readVariant(e.target.closest('.variant-form'), c);
+    if (!v) return;
+    setProgress(c.id, { variants: [...(progress(c.id).variants || []), v] });
+    placeCasePanel(false);
+  } else if (e.target.closest('[data-del-variant]')) {
+    const c = openCaseObj();
+    const list = [...(progress(c.id).variants || [])];
+    list.splice(Number(e.target.closest('[data-del-variant]').dataset.delVariant), 1);
+    setProgress(c.id, { variants: list.length ? list : null });
     placeCasePanel(false);
   }
 });
 $('#algos-list').addEventListener('input', e => {
+  if (e.target.closest('.variant-form')) { readVariant(e.target.closest('.variant-form'), openCaseObj()); return; }
   if (!e.target.matches('.case-alg')) return;
-  const set = currentSet();
-  const c = set.CASES.find(x => x.id === openCaseId);
-  const panel = e.target.closest('.case-panel');
-  checkCaseAlg(panel, set, c);
+  const c = openCaseObj();
+  const el = e.target.closest('.alg-field');
+  checkCaseAlg(el, c);
   // On n'enregistre que les algos valides (ou vide = algo par défaut).
-  const alg = e.target.value.trim();
-  editingCaseId = c.id;
-  if (!panel.querySelector('.case-check').classList.contains('error')) {
-    setProgress(c.id, { alg });
+  editingField = fieldId(c, el.dataset.field);
+  if (!el.querySelector('.case-check').classList.contains('error')) {
+    setFieldValue(c, el.dataset.field, e.target.value.trim());
     refreshCaseButton(c);
   }
 });
 $('#algos-list').addEventListener('keydown', e => {
   if (e.target.matches('.case-alg')) {
-    const panel = e.target.closest('.case-panel');
-    const c = currentSet().CASES.find(x => x.id === openCaseId);
+    const el = e.target.closest('.alg-field');
+    const c = openCaseObj();
     if (e.key === 'Tab' && !e.shiftKey) {
       // Tab : met l'algo par défaut et le verrouille.
       e.preventDefault();
-      e.target.value = c.alg;
-      setProgress(c.id, { alg: c.alg });
+      const def = fieldOf(el, c).def;
+      e.target.value = def;
+      setFieldValue(c, el.dataset.field, def);
       refreshCaseButton(c);
-      checkCaseAlg(panel, currentSet(), c);
-      editingCaseId = null;
-      updateLock(panel, c);
-      panel.querySelector('.case-alg-locked').focus();
+      checkCaseAlg(el, c);
+      editingField = null;
+      updateLock(el, c);
+      el.querySelector('.case-alg-locked').focus();
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       e.target.blur();
@@ -1017,8 +1101,8 @@ $('#algos-list').addEventListener('keydown', e => {
 $('#algos-list').addEventListener('keyup', e => { if (e.target.matches('.case-alg-locked')) cancelUnlock(); });
 $('#algos-list').addEventListener('focusout', e => {
   if (!e.target.matches('.case-alg')) return;
-  const c = currentSet()?.CASES.find(x => x.id === openCaseId);
-  if (c) commitCaseAlg(e.target.closest('.case-panel'), c);
+  const c = openCaseObj();
+  if (c) commitCaseAlg(e.target.closest('.alg-field'), c);
 });
 $('#algos-list').addEventListener('pointerdown', e => {
   const box = e.target.closest('.case-alg-locked');
@@ -1029,8 +1113,9 @@ for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
 }
 $('#algos-list').addEventListener('contextmenu', e => { if (e.target.closest('.case-alg-locked')) e.preventDefault(); });
 $('#algos-list').addEventListener('change', e => {
+  if (e.target.closest('.variant-form')) { readVariant(e.target.closest('.variant-form'), openCaseObj()); return; }
   if (e.target.name !== 'case-status') return;
-  const c = currentSet().CASES.find(x => x.id === openCaseId);
+  const c = openCaseObj();
   setProgress(c.id, { status: e.target.value === 'unknown' ? '' : e.target.value });
   refreshCaseButton(c);
 });
@@ -1169,7 +1254,8 @@ async function prepareAttempt() {
   const c = pickCase();
   const auf = data.trainer.auf !== 'off';
   if (data.trainer.scramble === 'inverse') {
-    const setup = reverseSetup(progressIn(key, c.id).alg || c.alg, Math.random, { auf });
+    const p = progressIn(key, c.id);
+    const setup = reverseSetup(p.alg || p.slots?.FR || c.alg, Math.random, { auf });
     return { c, state: stateAfter(setup), scramble: formatAlg(simplify(setup)) };
   }
   const state = randomCaseState(set, c, Math.random, { auf });
@@ -1185,7 +1271,8 @@ function showAttempt(attempt) {
   const show = data.trainer.check === 'on';
   $('#tr-preview').hidden = !show;
   if (show) {
-    $('#tr-preview').innerHTML = `${renderLL(attempt.state, training.set.view)}<strong>${esc(attempt.c.name)}</strong>`;
+    const img = training.set.view === 'f2l' ? renderF2L(attempt.state) : renderLL(attempt.state, training.set.view);
+    $('#tr-preview').innerHTML = `${img}<strong>${esc(attempt.c.name)}</strong>`;
   }
 }
 
@@ -1265,10 +1352,11 @@ function showLastAttempt() {
   const last = trHistory.at(-1);
   const set = ALG_SETS[last.key];
   const c = set.CASES.find(x => x.id === last.id);
-  const alg = progressIn(last.key, c.id).alg || c.alg;
+  const p = progressIn(last.key, c.id);
+  const alg = p.alg || p.slots?.FR || c.alg;
   $('#tr-last').hidden = false;
   $('#tr-last').innerHTML = `
-    <div class="tr-last-img">${renderLL(algCaseState(c.alg), set.view)}</div>
+    <div class="tr-last-img">${caseImageFor(c)}</div>
     <div class="tr-last-body">
       <div><strong>${esc(c.name)}</strong> · ${Stats.fmt(last.ms, { precision: precision() })}</div>
       <code>${esc(alg)}</code>

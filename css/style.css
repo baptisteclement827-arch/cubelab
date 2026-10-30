@@ -285,7 +285,31 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .case-panel-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .case-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .case-panel-head h3 { margin: 0; font-size: 18px; }
-.case-panel .stack > label { font-weight: 600; font-size: 14px; }
+.alg-fields { display: flex; flex-direction: column; gap: 8px; }
+.alg-fields.cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.alg-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.alg-field > label { font-weight: 600; font-size: 14px; }
+.alg-fields.cols .case-alg { font-size: 14px; }
+.alg-fields.cols .case-alg-text { font-size: 14px; }
+.alg-fields.cols .case-check { font-size: 12px; }
+/* Variantes F2L avec slots libres */
+.variants { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.variants-title { font-size: 14px; }
+.variant { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.variant code { font-family: var(--mono); flex: 1; min-width: 160px; }
+.variant .btn { font-size: 13px; padding: 2px 8px; }
+.variant-tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.variant-add summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px; width: fit-content; }
+.variant-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--surface-2); }
+.variant-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.variant-row > .muted { min-width: 90px; }
+.variant-form .chip span { font-family: inherit; }
+.chip input:disabled + span { opacity: 0.35; cursor: default; }
+.variant-alg { font-family: var(--mono); font-size: 15px; width: 100%; }
+.variant-check { margin: 0; font-size: 13px; }
+.variant-check.ok { color: var(--ready); font-weight: 600; }
+.variant-check.error { color: var(--danger); }
+.variant-form .btn { align-self: flex-start; }
 .case-alg[hidden], .case-alg-locked[hidden] { display: none; }
 /* Algo verrouillé : un appui long (1 s) remplit la barre puis déverrouille. */
 .case-alg-locked {
@@ -553,5 +577,6 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
   .case-panel { flex-direction: column; align-items: center; padding: 12px; }
   .case-panel-img { width: 120px; }
   .case-panel-body { width: 100%; }
+  .alg-fields.cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gen-results td.actions .btn { padding: 2px 4px; }
 }

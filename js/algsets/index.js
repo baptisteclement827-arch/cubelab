@@ -1,10 +1,12 @@
 // Bibliothèque d'algos : ensembles par puzzle (clé « puzzle/ensemble ») et calcul de l'état de chaque cas.
 import { NxNCube } from '../core/nxn.js';
-import { parseAlg, invertMoves } from '../core/notation.js';
+import { parseAlg, invertMoves, formatAlg, formatMove } from '../core/notation.js';
 import * as OLL from './333-oll.js?v=6';
 import * as PLL from './333-pll.js?v=6';
+import * as F2L from './333-f2l.js?v=28';
 
 export const ALG_SETS = {
+  '333/f2l': { ...F2L, view: 'f2l' },
   '333/oll': { ...OLL, view: 'oll' },
   '333/pll': { ...PLL, view: 'pll' },
 };
@@ -18,7 +20,7 @@ const CENTERS = [4, 13, 22, 31, 40, 49];
 export function relabel(state) {
   const map = [];
   CENTERS.forEach((idx, f) => { map[state[idx]] = f; });
-  return state.map(c => map[c]);
+  return state.map(c => (c < 6 ? map[c] : c)); // 6 = facette grise (masquée), inchangée
 }
 
 // État du cube quand le cas se présente : l'inverse de l'algo appliqué au cube résolu.
@@ -35,6 +37,7 @@ const f2lSolved = s => {
 const SOLVED_BY_VIEW = {
   oll: s => f2lSolved(s) && isOriented(s),
   pll: s => cube3.isSolved(s), // une rotation finale de U (AUF) est essayée par solvesCase
+  f2l: s => f2lSolved(s),
 };
 
 const AUFS = ['', 'U', 'U2', "U'"];
@@ -62,6 +65,11 @@ export function solvesCase(set, c, alg) {
 const weightCache = new Map();
 export function caseWeights(set) {
   if (weightCache.has(set)) return weightCache.get(set);
+  if (set.view === 'f2l') {
+    const w = new Map(set.CASES.map(c => [c.id, 1]));
+    weightCache.set(set, w);
+    return w;
+  }
   const LL = [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 36, 37, 38, 45, 46, 47];
   const key = s => (set.view === 'oll' ? LL.map(i => (s[i] === 0 ? 1 : 0)).join('') : Array.from(s).join(''));
   const w = new Map();
@@ -97,6 +105,13 @@ export function randomCaseState(set, c, rand = Math.random, { auf = true } = {})
     const p = pickWeighted([...pll.CASES, null], x => (x ? w.get(x.id) : 4), rand); // null = PLL skip
     if (p) s = relabel(cube3.apply(s, invertMoves(parseAlg(p.alg))));
     s = cube3.apply(s, randomAuf(rand));
+  } else if (set.view === 'f2l') {
+    // Dernière couche quelconque : une OLL et une PLL au hasard (ou rien).
+    for (const other of [ALG_SETS['333/oll'], ALG_SETS['333/pll']]) {
+      const x = other.CASES[Math.floor(rand() * (other.CASES.length + 1))];
+      if (x) s = relabel(cube3.apply(s, invertMoves(parseAlg(x.alg))));
+      s = cube3.apply(s, randomAuf(rand));
+    }
   } else if (auf) {
     s = cube3.apply(s, randomAuf(rand));
   }
@@ -112,3 +127,83 @@ export function reverseSetup(alg, rand = Math.random, { auf = true } = {}) {
 
 // État du cube après un setup (couleurs renommées d'après les centres).
 export const stateAfter = moves => relabel(cube3.apply(cube3.solved(), moves));
+
+// ---------- F2L : 4 slots, variantes avec des slots libres ----------
+export const GRAY = 6;
+export const SLOTS = [
+  { id: 'FR', name: 'FR', faces: [2, 1], rot: '' },     // avant droit (slot des algos de base)
+  { id: 'FL', name: 'FL', faces: [2, 4], rot: "y'" },   // avant gauche
+  { id: 'BR', name: 'BR', faces: [5, 1], rot: 'y' },    // arrière droit
+  { id: 'BL', name: 'BL', faces: [5, 4], rot: 'y2' },   // arrière gauche
+];
+
+// Pièces : facettes regroupées par position (face ±3 ramenée à ±2).
+const PIECES = (() => {
+  const map = new Map();
+  cube3.points.forEach((p, i) => {
+    const key = p.map(v => Math.sign(v) * Math.min(Math.abs(v), 2)).join(',');
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(i);
+  });
+  return [...map.values()].filter(p => p.length > 1);
+})();
+const faceOf = i => Math.floor(i / 9);
+const llPieces = PIECES.filter(p => p.some(i => faceOf(i) === 0));
+const slotPieces = slot => PIECES.filter(p => {
+  const f = p.map(faceOf);
+  return !f.includes(0) && slot.faces.every(x => f.includes(x));
+});
+
+// Cube résolu où les pièces de la dernière couche et des slots libres sont grises (sans importance).
+function maskedF2L(empty = []) {
+  const s = cube3.solved();
+  const gray = [...llPieces, ...SLOTS.filter(sl => empty.includes(sl.id)).flatMap(slotPieces)];
+  for (const p of gray) for (const i of p) s[i] = GRAY;
+  return s;
+}
+
+// Traduit un algo dans un autre repère : rot A rot⁻¹, réécrit sans rotation autour (R -> B, etc.).
+const moveCache = new Map();
+const ID = Uint16Array.from({ length: 54 }, (_, i) => i);
+const permKey = moves => cube3.apply(ID, moves).join();
+const CANDIDATES = (() => {
+  const out = [];
+  for (const base of ['U', 'R', 'F', 'D', 'L', 'B', 'u', 'r', 'f', 'd', 'l', 'b', 'M', 'E', 'S', 'x', 'y', 'z']) {
+    for (const suffix of ['', '2', "'"]) out.push(parseAlg(base + suffix)[0]);
+  }
+  return out;
+})();
+function translateMove(m, rot) {
+  const key = `${formatMove(m)}|${rot}`;
+  if (!moveCache.has(key)) {
+    const r = parseAlg(rot);
+    const target = permKey([...r, m, ...invertMoves(r)]);
+    moveCache.set(key, CANDIDATES.find(c => permKey([c]) === target) || m);
+  }
+  return moveCache.get(key);
+}
+export function translateAlg(alg, rot) {
+  if (!rot) return alg;
+  return formatAlg(parseAlg(alg).map(m => translateMove(m, rot)));
+}
+
+const slotOf = id => SLOTS.find(s => s.id === id);
+// Algo par défaut pour un slot : celui du FR, traduit pour ce slot.
+export const slotAlg = (c, slotId) => translateAlg(c.alg, slotOf(slotId).rot);
+
+// État masqué du cas pour un slot donné (pièces de la dernière couche et des slots libres en gris).
+export function f2lCaseState(c, slotId = 'FR', empty = []) {
+  return relabel(cube3.apply(maskedF2L(empty), invertMoves(parseAlg(slotAlg(c, slotId)))));
+}
+
+// L'algo résout-il le cas pour ce slot, les slots « empty » étant libres ? Renvoie l'AUF avant, ou null.
+export function solvesF2L(c, slotId, alg, empty = []) {
+  const moves = parseAlg(alg);
+  if (!moves.length) return null;
+  const start = f2lCaseState(c, slotId, empty);
+  for (const auf of AUFS) {
+    const s = relabel(cube3.apply(start, [...parseAlg(auf), ...moves]));
+    if (s.every((v, i) => v === GRAY || v === faceOf(i))) return auf;
+  }
+  return null;
+}

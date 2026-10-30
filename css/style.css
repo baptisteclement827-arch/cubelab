@@ -424,6 +424,8 @@ body.inspecting .side, body.inspecting .last-actions { visibility: hidden; }
 .gaps .gap-pause { fill: var(--series-2); }
 .gaps .gap-limit { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 0; opacity: 0.6; }
 .gaps-legend { font-size: 12px; }
+.x-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.x-kpis .kpi-label { font-size: 11px; }
 body.solving .dr-phase { visibility: visible; }
 #view-trainer.empty > :not(#tr-empty), #view-trainer:not(.empty) > #tr-empty { display: none; }
 .tr-info { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }

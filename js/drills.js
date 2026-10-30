@@ -7,13 +7,18 @@ import { parseAlg } from './core/notation.js';
 export const DRILLS = [
   { id: 'bldcross', name: 'BLD Cross + X', puzzle: '333', analysis: true },
   { id: 'slow', name: 'Slow solves', puzzle: '333', analysis: false },
+  // loop : regard puis tour à l'aveugle, en boucle jusqu'à ce que le cube soit résolu.
+  { id: 'xsolve', name: 'X solves (lookahead)', puzzle: '333', analysis: true, loop: true },
 ];
 
 // États : idle -> analysis -> hold -> ready -> running -> done.
 export class DrillTimer {
-  constructor({ settings, onUpdate, onDone, analysis = () => true }) {
+  constructor({ settings, onUpdate, onDone, onSegment = () => {}, analysis = () => true, loop = () => false }) {
     this.settings = settings;
     this.hasAnalysis = analysis;
+    this.isLoop = loop;
+    this.onSegment = onSegment;
+    this.segments = []; // X solves : { look, blind } pour chaque regard suivi d'un passage à l'aveugle
     this.onUpdate = onUpdate;
     this.onDone = onDone;
     this.state = 'idle';
@@ -29,6 +34,7 @@ export class DrillTimer {
 
   keyDown(code, repeat) {
     if (code === 'Escape') { if (this.busy) { this.cancel(); return true; } return false; }
+    if (code === 'Enter' && this.isLoop() && this.state === 'analysis' && this.segments.length) { this.finish(); return true; }
     if (code !== 'Space') return false;
     if (!repeat) this.press();
     return true;
@@ -66,6 +72,7 @@ export class DrillTimer {
       // Appui court depuis le repos : début de l'analyse.
       this.pressed = false;
       this.state = 'analysis';
+      this.segments = [];
       this.analysisStart = performance.now();
       this.loop();
     } else if (this.state === 'hold') {
@@ -87,14 +94,33 @@ export class DrillTimer {
 
   stop(ms) {
     const exec = ms ?? Math.floor(performance.now() - this.startTime);
+    if (this.isLoop()) {
+      // Fin d'un passage à l'aveugle : nouveau regard.
+      this.segments.push({ look: this.analysisMs, blind: exec });
+      this.state = 'analysis';
+      this.analysisStart = performance.now();
+      this.onSegment(this.segments);
+      this.loop();
+      return;
+    }
     this.state = 'done';
     cancelAnimationFrame(this.raf);
     this.onUpdate({ state: 'done', ms: exec, analysis: this.analysisMs });
     this.onDone({ analysis: this.analysisMs, exec });
   }
 
+  // X solves : le cube est résolu, l'essai se termine.
+  finish() {
+    clearTimeout(this.holdTimer);
+    cancelAnimationFrame(this.raf);
+    this.state = 'done';
+    this.onUpdate({ state: 'done', segments: this.segments });
+    this.onDone({ segments: this.segments });
+  }
+
   cancel() {
     clearTimeout(this.holdTimer);
+    this.segments = [];
     cancelAnimationFrame(this.raf);
     this.pressed = false;
     this.state = 'idle';
@@ -258,4 +284,12 @@ export class Metronome {
     this.timer = setInterval(beat, 1000 / tps);
   }
   stop() { clearInterval(this.timer); this.timer = null; }
+}
+
+// ---------- X solves ----------
+// Résumé d'un essai : nombre de regards (X), temps de regard, temps à l'aveugle, total.
+export function xsolveSummary(segments) {
+  const look = segments.reduce((a, x) => a + x.look, 0);
+  const blind = segments.reduce((a, x) => a + x.blind, 0);
+  return { x: segments.length, look, blind, total: look + blind };
 }

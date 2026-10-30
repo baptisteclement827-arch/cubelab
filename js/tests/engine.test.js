@@ -5,7 +5,7 @@ import { randomMoveScramble } from '../core/scramble.js';
 import { average, trimFor, fmt, DNF } from '../stats.js';
 import { ScrambleGuide } from '../scramble-guide.js';
 import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
-import { whiteCrossLength, slowMetrics } from '../drills.js';
+import { whiteCrossLength, slowMetrics, xsolveSummary } from '../drills.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -177,6 +177,11 @@ test('Slow solves : pauses et TPS', () => {
   eq(m.longest, 2500, 'plus longue pause');
   ok(Math.abs(m.tps - 4 / 4.2) < 1e-9, 'TPS');
   eq(slowMetrics([500, 1000, 3500, 4000], 4200, 0.5).pauses, 0, 'à 0.5 TPS, le seuil passe à 4 s');
+});
+
+test('X solves : nombre de regards et temps', () => {
+  const r = xsolveSummary([{ look: 5000, blind: 8000 }, { look: 3000, blind: 4000 }, { look: 1000, blind: 2000 }]);
+  ok(r.x === 3 && r.look === 9000 && r.blind === 14000 && r.total === 23000, JSON.stringify(r));
 });
 
 export default results;

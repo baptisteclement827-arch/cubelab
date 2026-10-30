@@ -6,7 +6,7 @@ import * as Store from './storage.js?v=24';
 import * as Stats from './stats.js?v=10';
 import { renderStatsView, renderSessionsView, renderAlgosView } from './statsview.js?v=27';
 import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
-import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome } from './drills.js?v=37';
+import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome, xsolveSummary } from './drills.js?v=39';
 import { randomMoveScramble } from './core/scramble.js';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
@@ -1463,6 +1463,7 @@ let slowMoves = null;
 const metronome = new Metronome();
 const currentDrill = () => DRILLS.find(d => d.id === drillId) || DRILLS[0];
 const isSlow = () => drillId === 'slow';
+const isX = () => drillId === 'xsolve';
 let drillScramble = '';
 let drillPending = null; // essai terminé, en attente de « Réussi / Raté »
 const drillList = () => ((data.drills ||= {})[drillId] ||= []);
@@ -1484,7 +1485,15 @@ const SLOW_HINTS = {
   ready: 'Relâche pour démarrer',
   running: '',
 };
-const drillHint = state => (isSlow() ? SLOW_HINTS : DRILL_HINTS)[state] ?? '';
+const X_HINTS = {
+  idle: 'Espace : premier regard (sans toucher le cube)',
+  done: 'Espace : nouvel essai',
+  analysis: 'Regarde sans toucher · maintiens Espace puis relâche pour tourner les yeux fermés',
+  hold: 'Attends le vert…',
+  ready: 'Relâche et ferme les yeux',
+  running: '',
+};
+const drillHint = state => (isSlow() ? SLOW_HINTS : isX() ? X_HINTS : DRILL_HINTS)[state] ?? '';
 const DRILL_HINTS = {
   idle: 'Espace : lancer l\'analyse',
   done: 'Espace : nouvelle analyse',
@@ -1497,11 +1506,30 @@ const DRILL_HINTS = {
 const drillTimer = new DrillTimer({
   settings,
   analysis: () => currentDrill().analysis,
+  loop: () => !!currentDrill().loop,
+  onSegment() {
+    // Cube connecté : si le cube est résolu à la fin d'un passage à l'aveugle, l'essai se termine.
+    if (smart.conn && smart.state && cube3.isSolved(smart.state)) { drillTimer.finish(); return; }
+    showXButtons();
+  },
   onUpdate(v) {
     const el = $('#dr-timer');
     el.className = 'timer';
     const phase = $('#dr-phase');
-    if (v.state === 'running') {
+    const n = drillTimer.segments.length + 1;
+    if (isX() && v.state === 'done') {
+      const sum = xsolveSummary(v.segments || drillTimer.segments);
+      el.textContent = String(sum.x);
+      phase.textContent = `Résolu en ${sum.x} regard${sum.x > 1 ? 's' : ''}`;
+    } else if (isX() && v.state === 'running') {
+      el.textContent = runningText(v.ms);
+      phase.textContent = `Les yeux fermés · n° ${n}`;
+      $('#dr-result').hidden = true;
+    } else if (isX() && v.analysis !== undefined) {
+      el.textContent = (v.analysis / 1000).toFixed(1);
+      el.classList.add(v.state === 'analysis' ? 'inspect' : v.state);
+      phase.textContent = `Regard n° ${n}`;
+    } else if (v.state === 'running') {
       el.textContent = runningText(v.ms);
       phase.textContent = isSlow() ? (drillPace ? `Métronome ${String(drillPace).replace('.', ',')} TPS` : '') : 'Exécution';
     } else if (isSlow() && v.state !== 'done') {
@@ -1519,9 +1547,10 @@ const drillTimer = new DrillTimer({
     document.body.classList.toggle('solving', v.state === 'running');
     $('#dr-hint').textContent = drillPending && v.state === 'done' ? '' : drillHint(v.state);
   },
-  onDone({ analysis, exec }) {
+  onDone({ analysis, exec, segments }) {
     metronome.stop();
     if (isSlow()) { saveSlow(exec); newDrillScramble(); return; }
+    if (isX()) { saveX(segments); newDrillScramble(); return; }
     drillPending = { n: drillPairs, diff: drillDiff.id, s: drillScramble, analysis, exec, d: Date.now() };
     // Cube connecté : vérification automatique (cross d'une couleur quelconque + au moins n paires).
     if (smart.conn && smart.state) {
@@ -1547,8 +1576,34 @@ drillTimer.start = () => {
 const drillCancel = drillTimer.cancel.bind(drillTimer);
 drillTimer.cancel = () => { metronome.stop(); drillCancel(); };
 
-// Mouvement du cube connecté pendant un slow solve : instant noté ; cube résolu = fin du solve.
+// X solves : boutons « Résolu » et « Abandonner » pendant les regards (après au moins un passage à l'aveugle).
+function showXButtons() {
+  const r = $('#dr-result');
+  r.hidden = false;
+  r.innerHTML = `<span class="muted">${drillTimer.segments.length} passage${drillTimer.segments.length > 1 ? 's' : ''} à l'aveugle</span>
+    <button type="button" class="btn ok-btn" data-x="done">Résolu (Entrée)</button>
+    <button type="button" class="btn danger" data-x="dnf">Abandonner</button>`;
+}
+
+function saveX(segments, dnf = false) {
+  const sum = xsolveSummary(segments);
+  drillList().push({ s: drillScramble, seg: segments, x: sum.x, d: Date.now(), ...(dnf ? { dnf: true } : {}) });
+  persist();
+  const r = $('#dr-result');
+  r.hidden = false;
+  const sec = ms => `${(ms / 1000).toFixed(1)} s`;
+  r.innerHTML = dnf
+    ? '<span class="no">Abandonné</span>'
+    : `<span>Regards ${sec(sum.look)} · à l'aveugle ${sec(sum.blind)} · total ${sec(sum.total)}</span>`;
+  renderDrillStats();
+}
+
+// Mouvement du cube connecté : slow solve (instants, arrêt au cube résolu) ; X solves (cube résolu les yeux fermés = fin).
 function drillSmartMove(now) {
+  if (activeTab === 'drills' && isX() && drillTimer.state === 'running' && cube3.isSolved(smart.state)) {
+    drillTimer.stop(Math.floor(now - drillTimer.startTime)); // onSegment voit le cube résolu et termine l'essai
+    return;
+  }
   if (activeTab !== 'drills' || !isSlow() || drillTimer.state !== 'running' || !slowMoves) return;
   slowMoves.push(Math.round(now - drillTimer.startTime));
   if (cube3.isSolved(smart.state)) drillTimer.stop(Math.floor(now - drillTimer.startTime));
@@ -1615,7 +1670,7 @@ let drillScrambleToken = 0;
 async function newDrillScramble() {
   const drill = DRILLS.find(d => d.id === drillId);
   const token = ++drillScrambleToken;
-  const lvl = isSlow() ? {} : drillDiff;
+  const lvl = drillId === 'bldcross' ? drillDiff : {};
   $('#dr-scramble').textContent = 'Génération du mélange…';
   let scr;
   if (lvl.min !== undefined) {
@@ -1658,6 +1713,7 @@ function renderDrills() {
 
 function renderDrillStats() {
   if (isSlow()) { renderSlowStats(); return; }
+  if (isX()) { renderXStats(); return; }
   $('#dr-head').innerHTML = '<tr><th>#</th><th>X</th><th>Analyse</th><th>Exéc.</th><th></th></tr>';
   const list = drillList();
   const f = ms => Stats.fmt(ms, { precision: precision(), avg: true });
@@ -1721,6 +1777,32 @@ function renderSlowStats() {
   $('#dr-empty').hidden = list.length > 0;
 }
 
+// Stats des X solves : nombre de regards moyen et meilleur, temps de regard et à l'aveugle.
+function renderXStats() {
+  const list = drillList();
+  const ok = list.filter(x => !x.dnf);
+  const sums = ok.map(x => xsolveSummary(x.seg));
+  const avg = arr => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+  const sec = ms => (ms == null ? '–' : `${(ms / 1000).toFixed(1)} s`);
+  const last10 = sums.slice(-10);
+  $('#dr-stats').innerHTML = list.length ? `<div class="kpis small x-kpis">
+      <div class="kpi"><span class="kpi-label">Regards (moyenne)</span><strong class="kpi-value">${ok.length ? avg(sums.map(x => x.x)).toFixed(1) : '–'}</strong></div>
+      <div class="kpi"><span class="kpi-label">Meilleur</span><strong class="kpi-value">${ok.length ? Math.min(...sums.map(x => x.x)) : '–'}</strong></div>
+      <div class="kpi"><span class="kpi-label">10 derniers</span><strong class="kpi-value">${last10.length ? avg(last10.map(x => x.x)).toFixed(1) : '–'}</strong></div>
+    </div>
+    <p class="muted dr-note">${list.length} essai${list.length > 1 ? 's' : ''}${list.length - ok.length ? `, dont ${list.length - ok.length} abandonné${list.length - ok.length > 1 ? 's' : ''}` : ''} · regard moyen ${sec(avg(sums.map(x => x.look / x.x)))} · aveugle moyen ${sec(avg(sums.map(x => x.blind / x.x)))} (par passage)</p>`
+    : '<p class="empty">Les stats apparaîtront après ton premier essai.</p>';
+  $('#dr-head').innerHTML = '<tr><th>#</th><th>Regards</th><th>Regard</th><th>Aveugle</th><th></th></tr>';
+  const rowsH = [];
+  for (let i = list.length - 1; i >= Math.max(0, list.length - 100); i--) {
+    const x = list[i], sum = xsolveSummary(x.seg);
+    rowsH.push(`<tr><td>${i + 1}</td><td class="${x.dnf ? 'dr-fail' : ''}">${x.dnf ? 'DNF' : sum.x}</td><td>${sec(sum.look)}</td><td>${sec(sum.blind)}</td>
+      <td><button type="button" class="btn ghost dr-del" data-del-drill="${i}" title="Supprimer">×</button></td></tr>`);
+  }
+  $('#dr-body').innerHTML = rowsH.join('');
+  $('#dr-empty').hidden = list.length > 0;
+}
+
 $('#dr-pace').addEventListener('click', e => {
   const b = e.target.closest('[data-pace]');
   if (!b || drillTimer.busy) return;
@@ -1748,6 +1830,15 @@ $('#dr-new').onclick = () => { if (!drillTimer.busy) newDrillScramble(); };
 $('#dr-result').addEventListener('click', e => {
   const b = e.target.closest('[data-drill-ok]');
   if (b) saveDrill(b.dataset.drillOk === '1', false);
+  const x = e.target.closest('[data-x]');
+  if (x?.dataset.x === 'done') drillTimer.finish();
+  else if (x?.dataset.x === 'dnf' && confirm('Abandonner cet essai ?')) {
+    const segs = drillTimer.segments;
+    drillTimer.cancel();
+    saveX(segs, true);
+    newDrillScramble();
+    $('#dr-hint').textContent = drillHint('idle');
+  }
 });
 $('#dr-body').addEventListener('click', e => {
   const b = e.target.closest('[data-del-drill]');

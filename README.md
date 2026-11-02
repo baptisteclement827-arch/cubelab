@@ -40,6 +40,7 @@ sinon un visiteur peut recevoir un mélange d'ancienne et de nouvelle version.
 - `js/timer.js` : machine à états du timer (inspection WCA, maintien, pénalités)
 - `js/stats.js` : moyennes WCA (ao5, ao12, ...), formatage
 - `js/storage.js` : localStorage + export/import JSON
+- `js/sync.js` : synchronisation entre appareils via un Gist GitHub privé (clé « gist » gardée dans le navigateur), fusion des données
 - `js/devices/gan-timer.js` : GAN Smart Timer en Bluetooth (Chrome / Edge), protocole d'après afedotov/gan-web-bluetooth (MIT)
 - `js/devices/moyu32.js` + `aes128.js` : cube MoYu WeiLong V10 AI en Bluetooth (protocole MoYu32 d'après csTimer)
 - `js/scramble-guide.js` : suivi du mélange mouvement par mouvement au cube connecté (étape atteinte, correction)

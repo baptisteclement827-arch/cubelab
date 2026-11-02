@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CubeLab</title>
-<link rel="stylesheet" href="css/style.css?v=42">
+<link rel="stylesheet" href="css/style.css?v=43">
 </head>
 <body>
 <div class="app">
@@ -420,6 +420,24 @@
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>
     </fieldset>
+    <fieldset>
+      <legend>Synchronisation entre appareils</legend>
+      <div id="sync-off">
+        <p class="muted sync-text">Garde les mêmes données sur tous tes appareils. Elles sont rangées dans un Gist <b>privé</b> de ton compte GitHub.
+          <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=CubeLab" target="_blank" rel="noopener">Créer une clé GitHub</a> (case « gist » seulement), puis colle-la ici, sur chaque appareil.</p>
+        <div class="sync-row">
+          <input type="password" id="sync-token" placeholder="Clé GitHub (ghp_…)" autocomplete="off" spellcheck="false">
+          <button type="button" class="btn primary" id="sync-enable">Activer</button>
+        </div>
+      </div>
+      <div id="sync-on" hidden>
+        <p id="sync-status" class="muted sync-text"></p>
+        <div class="row-btns">
+          <button type="button" class="btn" id="sync-now">Synchroniser maintenant</button>
+          <button type="button" class="btn danger" id="sync-disable">Désactiver</button>
+        </div>
+      </div>
+    </fieldset>
     <div class="dialog-actions"><button class="btn primary" value="close">Fermer</button></div>
   </form>
 </dialog>
@@ -454,6 +472,6 @@
   </form>
 </dialog>
 
-<script type="module" src="js/app.js?v=41"></script>
+<script type="module" src="js/app.js?v=43"></script>
 </body>
 </html>

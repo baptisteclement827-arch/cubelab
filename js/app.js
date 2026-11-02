@@ -9,6 +9,7 @@ import { splitsOf, PHASES, crossAndPairs } from './splits.js?v=33';
 import { DRILLS, DrillTimer, drillStats, PAIRS, DIFFICULTIES, difficultyOf, whiteCrossLength, PACES, slowMetrics, Metronome, xsolveSummary } from './drills.js?v=40';
 import { randomMoveScramble } from './core/scramble.js';
 import * as Goals from './goals.js?v=41';
+import * as Sync from './sync.js?v=43';
 import { Timer } from './timer.js?v=17';
 import { connectGanTimer, bluetoothAvailable, STATES as GAN } from './devices/gan-timer.js?v=17';
 import { connectMoyu32 } from './devices/moyu32.js?v=20';
@@ -33,7 +34,17 @@ const cubes = {};
 const cube = () => (cubes[puzzleId] ||= new NxNCube(PUZZLES[puzzleId].n));
 const settings = () => data.settings;
 const precision = () => Number(settings().precision);
-const persist = () => Store.save(data);
+// Synchronisation : réglages et état (déclarés tôt : persist peut servir dès le démarrage).
+let syncCfg = Sync.loadSyncConfig(); // { token, gistId, base : updatedAt de la dernière synchro }
+let syncBusy = false;
+let syncPushTimer = null;
+let lastPull = 0;
+// Chaque enregistrement date les données et prépare l'envoi vers la synchronisation (si elle est activée).
+const persist = () => {
+  data.updatedAt = Date.now();
+  Store.save(data);
+  scheduleSyncPush();
+};
 
 // Sessions par défaut : trois sessions principales (comptées dans les stats), une par façon de chronométrer,
 // et Casual (hors stats). Depuis une session principale, chaque solve va dans la Main de sa source.
@@ -94,6 +105,7 @@ const timerPuzzlePicker = picker($('#puzzle'), {
     persist();
     prefetched = null;
     refreshAll();
+syncPull();
   },
 });
 const sessionPicker = picker($('#session'), {
@@ -104,6 +116,7 @@ const sessionPicker = picker($('#session'), {
     else data.current[puzzleId] = id;
     persist();
     refreshAll();
+syncPull();
   },
 });
 
@@ -581,6 +594,7 @@ $('#stats-view').addEventListener('click', e => {
     statsTab = data.statsTab = 'session';
     persist();
     refreshAll();
+syncPull();
     return;
   }
   const chk = e.target.closest('[data-check]');
@@ -636,6 +650,7 @@ $('#solve-dialog').addEventListener('close', () => {
 /* ---------- Réglages ---------- */
 const form = $('#settings-dialog form');
 $('#settings-btn').onclick = () => {
+  renderSyncSettings();
   const s = settings();
   form.scrambleType.value = s.scrambleType;
   form.inspection.checked = s.inspection;
@@ -691,6 +706,7 @@ $('#session-dialog form').addEventListener('submit', e => {
   }
   persist();
   refreshAll();
+syncPull();
 });
 $('#session-new').onclick = () => openSessionDialog(null);
 $('#session-rename').onclick = () => openSessionDialog(session());
@@ -702,6 +718,7 @@ $('#session-delete').onclick = () => {
   delete data.current[puzzleId];
   persist();
   refreshAll();
+syncPull();
 };
 $('#export-btn').onclick = () => {
   const blob = new Blob([Store.exportJSON(data)], { type: 'application/json' });
@@ -721,6 +738,7 @@ $('#import-file').onchange = async e => {
     data = imported;
     persist();
     refreshAll();
+syncPull();
   } catch (err) {
     alert(`Import impossible : ${err.message}`);
   } finally {
@@ -2085,6 +2103,118 @@ function renderGoals() {
   renderCalendar();
 }
 
+/* ---------- Synchronisation (Gist GitHub privé) ---------- */
+const anyTimerBusy = () => timer.busy || trainerTimer.busy || drillTimer.busy;
+
+function setSyncStatus(text, error = false) {
+  const el = $('#sync-status');
+  el.textContent = text;
+  el.classList.toggle('error', error);
+}
+function renderSyncSettings() {
+  $('#sync-off').hidden = !!syncCfg;
+  $('#sync-on').hidden = !syncCfg;
+  if (syncCfg && !$('#sync-status').textContent) setSyncStatus(syncCfg.last ? `Dernière synchro : ${new Date(syncCfg.last).toLocaleString('fr-FR')}` : 'Activée');
+}
+
+// Après une récupération, on réaffiche tout avec les nouvelles données.
+function applyRemote(next) {
+  data = next;
+  Store.save(data);
+  refreshAll();
+  document.querySelector(`.tab[data-tab="${activeTab}"]`)?.click();
+}
+
+// Récupère les données en ligne : remplace si seules elles ont changé, fusionne si les deux ont changé.
+async function syncPull({ force = false } = {}) {
+  if (!syncCfg || syncBusy || anyTimerBusy()) return;
+  if (!force && Date.now() - lastPull < 10000) return;
+  syncBusy = true;
+  lastPull = Date.now();
+  try {
+    const remote = await Sync.pullGist(syncCfg.token, syncCfg.gistId);
+    const base = syncCfg.base || 0;
+    const localChanged = (data.updatedAt || 0) > base;
+    const remoteChanged = remote && (remote.updatedAt || 0) > base;
+    if (remoteChanged) {
+      const next = Store.importJSON(JSON.stringify(localChanged ? Sync.mergeData(data, remote) : remote));
+      applyRemote(next);
+    }
+    syncCfg.base = Math.max(remote?.updatedAt || 0, base);
+    if (localChanged) await pushNow();
+    else markSynced();
+  } catch (err) {
+    setSyncStatus(`Synchro impossible : ${err.message}`, true);
+  } finally {
+    syncBusy = false;
+  }
+}
+
+async function pushNow() {
+  await Sync.pushGist(syncCfg.token, syncCfg.gistId, data);
+  syncCfg.base = data.updatedAt || Date.now();
+  markSynced();
+}
+function markSynced() {
+  syncCfg.last = Date.now();
+  Sync.saveSyncConfig(syncCfg);
+  setSyncStatus(`Synchronisé à ${new Date(syncCfg.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
+}
+
+// Envoi quelques secondes après la dernière modification ; si l'autre appareil a envoyé entre-temps, on fusionne d'abord.
+function scheduleSyncPush() {
+  if (!syncCfg) return;
+  clearTimeout(syncPushTimer);
+  syncPushTimer = setTimeout(async () => {
+    if (syncBusy || anyTimerBusy()) { scheduleSyncPush(); return; }
+    syncBusy = true;
+    try {
+      const remote = await Sync.pullGist(syncCfg.token, syncCfg.gistId);
+      if (remote && (remote.updatedAt || 0) > (syncCfg.base || 0)) {
+        applyRemote(Store.importJSON(JSON.stringify(Sync.mergeData(data, remote))));
+      }
+      await pushNow();
+    } catch (err) {
+      setSyncStatus(`Synchro impossible : ${err.message}`, true);
+    } finally {
+      syncBusy = false;
+    }
+  }, 4000);
+}
+
+$('#sync-enable').onclick = async () => {
+  const token = $('#sync-token').value.trim();
+  if (!token) return;
+  $('#sync-enable').disabled = true;
+  try {
+    // Les données locales comptent comme modifiées : à la première synchro, elles sont fusionnées avec celles en ligne.
+    data.updatedAt ||= Date.now();
+    Store.save(data);
+    const gistId = await Sync.findOrCreateGist(token, data);
+    syncCfg = { token, gistId, base: 0 };
+    Sync.saveSyncConfig(syncCfg);
+    $('#sync-token').value = '';
+    renderSyncSettings();
+    setSyncStatus('Synchronisation…');
+    await syncPull({ force: true });
+  } catch (err) {
+    alert(`Activation impossible : ${err.message}`);
+  } finally {
+    $('#sync-enable').disabled = false;
+  }
+};
+$('#sync-now').onclick = () => { setSyncStatus('Synchronisation…'); syncPull({ force: true }); };
+$('#sync-disable').onclick = () => {
+  if (!confirm('Désactiver la synchronisation sur cet appareil ? Les données restent ici et dans ton Gist.')) return;
+  syncCfg = null;
+  Sync.saveSyncConfig(null);
+  $('#sync-status').textContent = '';
+  renderSyncSettings();
+};
+// On récupère les changements de l'autre appareil quand on revient sur l'onglet.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncPull(); });
+addEventListener('focus', () => syncPull());
+
 /* ---------- Labo d'algos ---------- */
 let labState = null;
 
@@ -2308,3 +2438,4 @@ function refreshAll() {
 }
 
 refreshAll();
+syncPull();

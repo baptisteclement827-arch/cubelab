@@ -7,6 +7,7 @@ import { ScrambleGuide } from '../scramble-guide.js';
 import { cfopSplits, crossAndPairs, pairsSolved } from '../splits.js';
 import { whiteCrossLength, slowMetrics, xsolveSummary } from '../drills.js';
 import { addPlanned, progressOf, reached, dayKey, parseDay } from '../goals.js';
+import { mergeData } from '../sync.js';
 
 const results = [];
 const test = (name, fn) => {
@@ -200,6 +201,24 @@ test('Calendrier : séance répétée certains jours', () => {
   ok(plan['2026-11-02'] && plan['2026-11-05'] && plan['2026-11-09'] && plan['2026-11-12'], Object.keys(plan).join());
   eq(addPlanned(plan, { text: 'Solves', from: '2026-11-03' }), 1, 'séance unique');
   eq(dayKey(parseDay('2026-02-28')), '2026-02-28', 'aller-retour de date');
+});
+
+test('Synchronisation : fusion de deux versions', () => {
+  const base = { version: 1, settings: { holdMs: 300 }, sessions: [{ id: 's', name: 'Main', puzzle: '333', solves: [{ t: 1000, d: 1 }] }], drills: {}, goals: [], plan: {} };
+  const pcA = structuredClone(base); pcA.updatedAt = 10;
+  pcA.sessions[0].solves.push({ t: 2000, d: 5 });
+  pcA.goals.push({ id: 'g1', title: 'sub 10' });
+  const pcB = structuredClone(base); pcB.updatedAt = 20;
+  pcB.settings.holdMs = 550;
+  pcB.sessions[0].solves.push({ t: 3000, d: 7 });
+  pcB.sessions.push({ id: 's2', name: 'OH', puzzle: '333', solves: [] });
+  pcB.plan['2026-11-02'] = [{ id: 'p1', text: '50 solves' }];
+  const m = mergeData(pcA, pcB);
+  eq(m.sessions.find(s => s.id === 's').solves.map(x => x.t).join(), '1000,2000,3000', 'solves des deux PC');
+  eq(m.sessions.length, 2, 'session créée sur B');
+  eq(m.settings.holdMs, 550, 'réglages : le plus récent');
+  eq(m.goals.length, 1, 'objectif créé sur A');
+  eq(m.plan['2026-11-02'].length, 1, 'séance créée sur B');
 });
 
 export default results;

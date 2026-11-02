@@ -615,6 +615,12 @@ legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
 .stack { display: flex; flex-direction: column; gap: 6px; }
 .stack textarea { width: 100%; resize: vertical; }
 .dialog-actions { display: flex; justify-content: flex-end; }
+.sync-text { font-size: 13px; margin: 0 0 8px; }
+.sync-text a { color: var(--accent); }
+.sync-text.error { color: var(--danger); }
+.sync-row { display: flex; gap: 8px; }
+.sync-row input { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+#settings-dialog { max-height: calc(100vh - 32px); overflow: auto; }
 .muted { color: var(--muted); margin: 0; }
 
 /* ---------- Mobile ---------- */
